@@ -67,12 +67,31 @@ final expensesProvider = NotifierProvider<ExpensesNotifier, List<Expense>>(
   ExpensesNotifier.new,
 );
 
+// TODOS LOS GASTOS
 final totalExpensesProvider = Provider<double>((ref) {
   final expenses = ref.watch(expensesProvider);
 
   return expenses.fold<double>(0, (total, expense) => total + expense.amount);
 });
 
+// GASTOS ÚNICAMENTE DEL MES ACTUAL
+final currentMonthExpensesProvider = Provider<List<Expense>>((ref) {
+  final expenses = ref.watch(expensesProvider);
+  final now = DateTime.now();
+
+  return expenses.where((expense) {
+    return expense.date.month == now.month && expense.date.year == now.year;
+  }).toList();
+});
+
+// TOTAL GASTADO DURANTE EL MES ACTUAL
+final currentMonthExpensesTotalProvider = Provider<double>((ref) {
+  final expenses = ref.watch(currentMonthExpensesProvider);
+
+  return expenses.fold<double>(0, (total, expense) => total + expense.amount);
+});
+
+// CATEGORÍAS DE TODOS LOS GASTOS
 final expensesByCategoryProvider = Provider<Map<ExpenseCategory, double>>((
   ref,
 ) {
@@ -90,3 +109,21 @@ final expensesByCategoryProvider = Provider<Map<ExpenseCategory, double>>((
 
   return totals;
 });
+
+// CATEGORÍAS ÚNICAMENTE DEL MES ACTUAL
+final currentMonthExpensesByCategoryProvider =
+    Provider<Map<ExpenseCategory, double>>((ref) {
+      final expenses = ref.watch(currentMonthExpensesProvider);
+
+      final totals = <ExpenseCategory, double>{};
+
+      for (final expense in expenses) {
+        totals.update(
+          expense.category,
+          (current) => current + expense.amount,
+          ifAbsent: () => expense.amount,
+        );
+      }
+
+      return totals;
+    });

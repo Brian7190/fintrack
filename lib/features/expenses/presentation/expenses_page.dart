@@ -16,289 +16,458 @@ final NumberFormat _moneyFormat = NumberFormat.currency(
   decimalDigits: 2,
 );
 
-class ExpensesPage extends ConsumerWidget {
+class ExpensesPage extends ConsumerStatefulWidget {
   const ExpensesPage({super.key});
 
-  void _openExpenseForm(BuildContext context, {Expense? expense}) {
+  @override
+  ConsumerState<ExpensesPage> createState() => _ExpensesPageState();
+}
+
+class _ExpensesPageState extends ConsumerState<ExpensesPage> {
+  final TextEditingController _searchController = TextEditingController();
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  DateTime _defaultDateForMonth(DateTime selectedMonth) {
+    final now = DateTime.now();
+
+    if (selectedMonth.year == now.year && selectedMonth.month == now.month) {
+      return now;
+    }
+
+    final lastDay = DateTime(
+      selectedMonth.year,
+      selectedMonth.month + 1,
+      0,
+    ).day;
+
+    final day = now.day > lastDay ? lastDay : now.day;
+
+    return DateTime(selectedMonth.year, selectedMonth.month, day);
+  }
+
+  void _openExpenseForm({Expense? expense}) {
+    final selectedMonth = ref.read(expenseFilterProvider).selectedMonth;
+
     showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
       useSafeArea: true,
       builder: (context) {
-        return ExpenseFormSheet(expense: expense);
+        return ExpenseFormSheet(
+          expense: expense,
+          initialDate: expense == null
+              ? _defaultDateForMonth(selectedMonth)
+              : null,
+        );
       },
     );
   }
 
+  bool _isCurrentMonth(DateTime selectedMonth) {
+    final now = DateTime.now();
+
+    return selectedMonth.year == now.year && selectedMonth.month == now.month;
+  }
+
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final expenses = ref.watch(currentMonthExpensesProvider);
+  Widget build(BuildContext context) {
+    final filter = ref.watch(expenseFilterProvider);
 
-    final total = ref.watch(currentMonthExpensesTotalProvider);
+    final monthExpenses = ref.watch(selectedMonthExpensesProvider);
 
-    final categoryTotals = ref.watch(currentMonthExpensesByCategoryProvider);
+    final visibleExpenses = ref.watch(filteredExpensesProvider);
+
+    final total = ref.watch(selectedMonthExpensesTotalProvider);
+
+    final categoryTotals = ref.watch(selectedMonthExpensesByCategoryProvider);
 
     final sortedCategories = categoryTotals.entries.toList()
       ..sort((a, b) => b.value.compareTo(a.value));
 
+    final isCurrentMonth = _isCurrentMonth(filter.selectedMonth);
+
     return Scaffold(
-      appBar: AppBar(
-        title: const Text(
-          'Gastos',
-          style: TextStyle(fontWeight: FontWeight.bold),
-        ),
-      ),
+      appBar: AppBar(title: const Text('Gastos')),
+
       floatingActionButton: FloatingActionButton(
         onPressed: () {
-          _openExpenseForm(context);
+          _openExpenseForm();
         },
         child: const Icon(Icons.add),
       ),
+
       body: SafeArea(
-        child: expenses.isEmpty
-            ? _EmptyExpenses(
-                onAdd: () {
-                  _openExpenseForm(context);
-                },
-              )
-            : SingleChildScrollView(
-                padding: const EdgeInsets.fromLTRB(18, 18, 18, 100),
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.fromLTRB(18, 18, 18, 100),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // =====================================
+              // SELECTOR DEL MES
+              // =====================================
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 12,
+                ),
+                decoration: BoxDecoration(
+                  color: AppColors.surfaceAlt,
+                  borderRadius: BorderRadius.circular(18),
+                  border: Border.all(color: AppColors.border),
+                ),
+                child: Row(
+                  children: [
+                    IconButton(
+                      tooltip: 'Mes anterior',
+                      onPressed: () {
+                        ref
+                            .read(expenseFilterProvider.notifier)
+                            .previousMonth();
+                      },
+                      icon: const Icon(Icons.chevron_left),
+                    ),
+
+                    Expanded(
+                      child: Column(
+                        children: [
+                          const Text(
+                            'Gastos del mes',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: AppColors.textSecondary,
+                            ),
+                          ),
+                          const SizedBox(height: 3),
+                          Text(
+                            MonthlyBudget.formatPeriod(
+                              month: filter.selectedMonth.month,
+                              year: filter.selectedMonth.year,
+                            ),
+                            textAlign: TextAlign.center,
+                            style: const TextStyle(
+                              fontSize: 19,
+                              fontWeight: FontWeight.bold,
+                              color: AppColors.textPrimary,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+
+                    IconButton(
+                      tooltip: 'Mes siguiente',
+                      onPressed: isCurrentMonth
+                          ? null
+                          : () {
+                              ref
+                                  .read(expenseFilterProvider.notifier)
+                                  .nextMonth();
+                            },
+                      icon: const Icon(Icons.chevron_right),
+                    ),
+                  ],
+                ),
+              ),
+
+              if (!isCurrentMonth) ...[
+                const SizedBox(height: 8),
+                Center(
+                  child: TextButton.icon(
+                    onPressed: () {
+                      ref
+                          .read(expenseFilterProvider.notifier)
+                          .goToCurrentMonth();
+                    },
+                    icon: const Icon(Icons.today_outlined, size: 18),
+                    label: const Text('Volver al mes actual'),
+                  ),
+                ),
+              ],
+
+              const SizedBox(height: 18),
+
+              // =====================================
+              // TOTAL DEL MES
+              // =====================================
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(22),
+                decoration: BoxDecoration(
+                  color: AppColors.primary,
+                  borderRadius: BorderRadius.circular(22),
+                ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // MES ACTUAL
-                    Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.all(18),
-                      decoration: BoxDecoration(
-                        color: AppColors.surfaceAlt,
-                        borderRadius: BorderRadius.circular(18),
-                        border: Border.all(color: AppColors.border),
-                      ),
-                      child: Row(
-                        children: [
-                          Container(
-                            width: 48,
-                            height: 48,
-                            decoration: BoxDecoration(
-                              color: AppColors.primarySoft,
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            child: const Icon(
-                              Icons.calendar_month_outlined,
-                              color: AppColors.primaryDark,
-                            ),
-                          ),
-                          const SizedBox(width: 14),
-                          Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              const Text(
-                                'Gastos del mes',
-                                style: TextStyle(
-                                  color: AppColors.textSecondary,
-                                  fontSize: 13,
-                                ),
-                              ),
-                              const SizedBox(height: 3),
-                              Text(
-                                MonthlyBudget.currentPeriodLabel(),
-                                style: const TextStyle(
-                                  fontSize: 20,
-                                  fontWeight: FontWeight.bold,
-                                  color: AppColors.textPrimary,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ],
-                      ),
+                    const Text(
+                      'Total gastado',
+                      style: TextStyle(color: Colors.white70, fontSize: 14),
                     ),
 
-                    const SizedBox(height: 20),
+                    const SizedBox(height: 7),
 
-                    // TOTAL GASTADO
-                    Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.all(22),
-                      decoration: BoxDecoration(
-                        color: AppColors.primary,
-                        borderRadius: BorderRadius.circular(22),
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Text(
-                            'Total gastado',
-                            style: TextStyle(
-                              color: Colors.white70,
-                              fontSize: 14,
-                            ),
-                          ),
-                          const SizedBox(height: 7),
-                          FittedBox(
-                            fit: BoxFit.scaleDown,
-                            alignment: Alignment.centerLeft,
-                            child: Text(
-                              _moneyFormat.format(total),
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 32,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                          ),
-                          const SizedBox(height: 6),
-                          Text(
-                            '${expenses.length} '
-                            '${expenses.length == 1 ? 'gasto registrado' : 'gastos registrados'}',
-                            style: const TextStyle(color: Colors.white70),
-                          ),
-                        ],
-                      ),
-                    ),
-
-                    const SizedBox(height: 24),
-
-                    // RESUMEN DE CATEGORÍAS
-                    if (sortedCategories.isNotEmpty) ...[
-                      const Text(
-                        'Por categoría',
-                        style: TextStyle(
-                          fontSize: 20,
+                    FittedBox(
+                      fit: BoxFit.scaleDown,
+                      alignment: Alignment.centerLeft,
+                      child: Text(
+                        _moneyFormat.format(total),
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 32,
                           fontWeight: FontWeight.bold,
-                          color: AppColors.textPrimary,
                         ),
                       ),
-                      const SizedBox(height: 12),
-                      Container(
-                        width: double.infinity,
-                        padding: const EdgeInsets.all(16),
-                        decoration: BoxDecoration(
-                          color: AppColors.surface,
-                          borderRadius: BorderRadius.circular(18),
-                          border: Border.all(color: AppColors.border),
+                    ),
+
+                    const SizedBox(height: 6),
+
+                    Text(
+                      '${monthExpenses.length} '
+                      '${monthExpenses.length == 1 ? 'gasto registrado' : 'gastos registrados'}',
+                      style: const TextStyle(color: Colors.white70),
+                    ),
+                  ],
+                ),
+              ),
+
+              const SizedBox(height: 24),
+
+              // =====================================
+              // RESUMEN DE CATEGORÍAS
+              // =====================================
+              if (sortedCategories.isNotEmpty) ...[
+                const Text(
+                  'Por categoría',
+                  style: TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                    color: AppColors.textPrimary,
+                  ),
+                ),
+
+                const SizedBox(height: 12),
+
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: AppColors.surface,
+                    borderRadius: BorderRadius.circular(18),
+                    border: Border.all(color: AppColors.border),
+                  ),
+                  child: Column(
+                    children: [
+                      for (final entry in sortedCategories)
+                        _CategorySummaryRow(
+                          category: entry.key,
+                          amount: entry.value,
+                          total: total,
                         ),
-                        child: Column(
-                          children: [
-                            for (final entry in sortedCategories)
-                              _CategorySummaryRow(
-                                category: entry.key,
-                                amount: entry.value,
-                                total: total,
-                              ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(height: 26),
                     ],
+                  ),
+                ),
 
-                    // LISTA DE GASTOS
-                    const Text(
-                      'Mis gastos',
-                      style: TextStyle(
-                        fontSize: 20,
-                        fontWeight: FontWeight.bold,
-                        color: AppColors.textPrimary,
-                      ),
-                    ),
+                const SizedBox(height: 26),
+              ],
 
-                    const SizedBox(height: 5),
+              // =====================================
+              // BUSCADOR
+              // =====================================
+              const Text(
+                'Mis gastos',
+                style: TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                  color: AppColors.textPrimary,
+                ),
+              ),
 
-                    const Text(
-                      'Toca un gasto para editarlo o eliminarlo.',
-                      style: TextStyle(
-                        color: AppColors.textSecondary,
-                        fontSize: 13,
-                      ),
-                    ),
+              const SizedBox(height: 12),
 
-                    const SizedBox(height: 14),
+              TextField(
+                controller: _searchController,
+                onChanged: (value) {
+                  ref.read(expenseFilterProvider.notifier).setSearch(value);
+                },
+                decoration: InputDecoration(
+                  hintText: 'Buscar gasto...',
+                  prefixIcon: const Icon(Icons.search),
+                  suffixIcon: filter.searchQuery.isEmpty
+                      ? null
+                      : IconButton(
+                          tooltip: 'Limpiar búsqueda',
+                          onPressed: () {
+                            _searchController.clear();
 
-                    for (final expense in expenses)
-                      _ExpenseCard(
-                        expense: expense,
-                        onTap: () {
-                          _openExpenseForm(context, expense: expense);
+                            ref
+                                .read(expenseFilterProvider.notifier)
+                                .setSearch('');
+                          },
+                          icon: const Icon(Icons.close),
+                        ),
+                ),
+              ),
+
+              const SizedBox(height: 16),
+
+              // =====================================
+              // FILTROS DE CATEGORÍA
+              // =====================================
+              const Text(
+                'Categoría',
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.textSecondary,
+                ),
+              ),
+
+              const SizedBox(height: 8),
+
+              SizedBox(
+                height: 42,
+                child: ListView(
+                  scrollDirection: Axis.horizontal,
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.only(right: 8),
+                      child: ChoiceChip(
+                        label: const Text('Todas'),
+                        selected: filter.category == null,
+                        onSelected: (_) {
+                          ref
+                              .read(expenseFilterProvider.notifier)
+                              .setCategory(null);
                         },
+                      ),
+                    ),
+
+                    for (final category in ExpenseCategory.values)
+                      Padding(
+                        padding: const EdgeInsets.only(right: 8),
+                        child: ChoiceChip(
+                          avatar: Icon(expenseCategoryIcon(category), size: 17),
+                          label: Text(category.label),
+                          selected: filter.category == category,
+                          onSelected: (_) {
+                            ref
+                                .read(expenseFilterProvider.notifier)
+                                .setCategory(category);
+                          },
+                        ),
                       ),
                   ],
                 ),
               ),
-      ),
-    );
-  }
-}
 
-// ====================================================
-// SIN GASTOS
-// ====================================================
+              const SizedBox(height: 16),
 
-class _EmptyExpenses extends StatelessWidget {
-  final VoidCallback onAdd;
+              // =====================================
+              // ORDENAMIENTO
+              // =====================================
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 14,
+                  vertical: 5,
+                ),
+                decoration: BoxDecoration(
+                  color: AppColors.surfaceAlt,
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: AppColors.border),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(
+                      Icons.sort,
+                      size: 20,
+                      color: AppColors.primaryDark,
+                    ),
 
-  const _EmptyExpenses({required this.onAdd});
+                    const SizedBox(width: 10),
 
-  @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: SingleChildScrollView(
-        padding: const EdgeInsets.all(28),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Container(
-              width: 90,
-              height: 90,
-              decoration: const BoxDecoration(
-                color: AppColors.primarySoft,
-                shape: BoxShape.circle,
+                    const Expanded(
+                      child: Text(
+                        'Ordenar por',
+                        style: TextStyle(color: AppColors.textSecondary),
+                      ),
+                    ),
+
+                    PopupMenuButton<ExpenseSortOrder>(
+                      initialValue: filter.sortOrder,
+                      onSelected: (order) {
+                        ref
+                            .read(expenseFilterProvider.notifier)
+                            .setSortOrder(order);
+                      },
+                      itemBuilder: (context) {
+                        return [
+                          for (final order in ExpenseSortOrder.values)
+                            PopupMenuItem(
+                              value: order,
+                              child: Text(order.label),
+                            ),
+                        ];
+                      },
+                      child: Row(
+                        children: [
+                          Text(
+                            filter.sortOrder.label,
+                            style: const TextStyle(
+                              fontWeight: FontWeight.w600,
+                              color: AppColors.textPrimary,
+                            ),
+                          ),
+                          const SizedBox(width: 4),
+                          const Icon(Icons.arrow_drop_down),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
               ),
-              child: const Icon(
-                Icons.receipt_long_outlined,
-                size: 42,
-                color: AppColors.primaryDark,
-              ),
-            ),
 
-            const SizedBox(height: 20),
+              const SizedBox(height: 18),
 
-            Text(
-              MonthlyBudget.currentPeriodLabel(),
-              style: const TextStyle(
-                fontSize: 14,
-                color: AppColors.textSecondary,
-              ),
-            ),
+              // =====================================
+              // RESULTADOS
+              // =====================================
+              if (monthExpenses.isEmpty)
+                _EmptyMonthExpenses(
+                  onAdd: () {
+                    _openExpenseForm();
+                  },
+                )
+              else if (visibleExpenses.isEmpty)
+                const _NoFilterResults()
+              else ...[
+                Text(
+                  '${visibleExpenses.length} '
+                  '${visibleExpenses.length == 1 ? 'resultado' : 'resultados'}',
+                  style: const TextStyle(
+                    fontSize: 12,
+                    color: AppColors.textSecondary,
+                  ),
+                ),
 
-            const SizedBox(height: 8),
+                const SizedBox(height: 10),
 
-            const Text(
-              'Todavía no tienes gastos',
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                fontSize: 21,
-                fontWeight: FontWeight.bold,
-                color: AppColors.textPrimary,
-              ),
-            ),
-
-            const SizedBox(height: 8),
-
-            const Text(
-              'Agrega tu primer gasto del mes para comenzar a controlar tu presupuesto.',
-              textAlign: TextAlign.center,
-              style: TextStyle(color: AppColors.textSecondary),
-            ),
-
-            const SizedBox(height: 24),
-
-            FilledButton.icon(
-              onPressed: onAdd,
-              icon: const Icon(Icons.add),
-              label: const Text('Agregar gasto'),
-            ),
-          ],
+                for (final expense in visibleExpenses)
+                  _ExpenseCard(
+                    expense: expense,
+                    onTap: () {
+                      _openExpenseForm(expense: expense);
+                    },
+                  ),
+              ],
+            ],
+          ),
         ),
       ),
     );
@@ -306,7 +475,7 @@ class _EmptyExpenses extends StatelessWidget {
 }
 
 // ====================================================
-// RESUMEN DE CATEGORÍA
+// CATEGORÍA
 // ====================================================
 
 class _CategorySummaryRow extends StatelessWidget {
@@ -408,7 +577,6 @@ class _ExpenseCard extends StatelessWidget {
       child: ListTile(
         onTap: onTap,
         contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-
         leading: Container(
           width: 46,
           height: 46,
@@ -421,7 +589,6 @@ class _ExpenseCard extends StatelessWidget {
             color: categoryColor,
           ),
         ),
-
         title: Text(
           expense.name,
           maxLines: 1,
@@ -431,7 +598,6 @@ class _ExpenseCard extends StatelessWidget {
             color: AppColors.textPrimary,
           ),
         ),
-
         subtitle: Padding(
           padding: const EdgeInsets.only(top: 3),
           child: Text(
@@ -444,22 +610,118 @@ class _ExpenseCard extends StatelessWidget {
             ),
           ),
         ),
-
-        trailing: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              _moneyFormat.format(expense.amount),
-              style: const TextStyle(
-                fontWeight: FontWeight.bold,
-                fontSize: 14,
-                color: AppColors.textPrimary,
-              ),
-            ),
-            const SizedBox(width: 3),
-            const Icon(Icons.chevron_right, color: AppColors.textSecondary),
-          ],
+        trailing: Text(
+          _moneyFormat.format(expense.amount),
+          style: const TextStyle(
+            fontWeight: FontWeight.bold,
+            fontSize: 14,
+            color: AppColors.textPrimary,
+          ),
         ),
+      ),
+    );
+  }
+}
+
+// ====================================================
+// MES SIN GASTOS
+// ====================================================
+
+class _EmptyMonthExpenses extends StatelessWidget {
+  final VoidCallback onAdd;
+
+  const _EmptyMonthExpenses({required this.onAdd});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(28),
+      decoration: BoxDecoration(
+        color: AppColors.surfaceAlt,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: Column(
+        children: [
+          const Icon(
+            Icons.receipt_long_outlined,
+            size: 42,
+            color: AppColors.primaryDark,
+          ),
+
+          const SizedBox(height: 14),
+
+          const Text(
+            'No hay gastos en este mes',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontSize: 19,
+              fontWeight: FontWeight.bold,
+              color: AppColors.textPrimary,
+            ),
+          ),
+
+          const SizedBox(height: 6),
+
+          const Text(
+            'Puedes registrar un gasto para el periodo seleccionado.',
+            textAlign: TextAlign.center,
+            style: TextStyle(color: AppColors.textSecondary),
+          ),
+
+          const SizedBox(height: 20),
+
+          FilledButton.icon(
+            onPressed: onAdd,
+            icon: const Icon(Icons.add),
+            label: const Text('Agregar gasto'),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ====================================================
+// FILTROS SIN RESULTADOS
+// ====================================================
+
+class _NoFilterResults extends StatelessWidget {
+  const _NoFilterResults();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(26),
+      decoration: BoxDecoration(
+        color: AppColors.surfaceAlt,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: const Column(
+        children: [
+          Icon(
+            Icons.search_off_outlined,
+            size: 38,
+            color: AppColors.textSecondary,
+          ),
+          SizedBox(height: 12),
+          Text(
+            'No se encontraron gastos',
+            style: TextStyle(
+              fontWeight: FontWeight.bold,
+              color: AppColors.textPrimary,
+            ),
+          ),
+          SizedBox(height: 5),
+          Text(
+            'Prueba con otro nombre o categoría.',
+            textAlign: TextAlign.center,
+            style: TextStyle(color: AppColors.textSecondary),
+          ),
+        ],
       ),
     );
   }

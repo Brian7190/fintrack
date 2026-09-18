@@ -30,19 +30,13 @@ class HomePage extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final budget = ref.watch(budgetProvider);
 
-    final spent = ref.watch(
-      currentMonthExpensesTotalProvider,
-    );
+    final spent = ref.watch(currentMonthExpensesTotalProvider);
 
-    final expenses = ref.watch(
-      currentMonthExpensesProvider,
-    );
+    final expenses = ref.watch(currentMonthExpensesProvider);
 
     final payments = ref.watch(paymentsProvider);
 
-    final nearestPayment = _getNearestPayment(
-      payments,
-    );
+    final nearestPayment = _getNearestPayment(payments);
 
     if (budget == null) {
       return _HomeWithoutBudget(
@@ -53,21 +47,15 @@ class HomePage extends ConsumerWidget {
 
     final double available = budget - spent;
 
-    final double progress = budget <= 0
-        ? 0
-        : (spent / budget).clamp(0.0, 1.0);
+    final double progress = budget <= 0 ? 0 : (spent / budget).clamp(0.0, 1.0);
 
-    final double percentageUsed = budget <= 0
-        ? 0
-        : (spent / budget) * 100;
+    final double percentageUsed = budget <= 0 ? 0 : (spent / budget) * 100;
 
     return Scaffold(
       appBar: AppBar(
         title: const Text(
           'FinTrack',
-          style: TextStyle(
-            fontWeight: FontWeight.bold,
-          ),
+          style: TextStyle(fontWeight: FontWeight.bold),
         ),
         actions: [
           IconButton(
@@ -75,23 +63,15 @@ class HomePage extends ConsumerWidget {
             onPressed: () {
               context.go(AppRoutes.login);
             },
-            icon: const Icon(
-              Icons.logout,
-            ),
+            icon: const Icon(Icons.logout),
           ),
         ],
       ),
       body: SafeArea(
         child: SingleChildScrollView(
-          padding: const EdgeInsets.fromLTRB(
-            18,
-            16,
-            18,
-            100,
-          ),
+          padding: const EdgeInsets.fromLTRB(18, 16, 18, 100),
           child: Column(
-            crossAxisAlignment:
-                CrossAxisAlignment.start,
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               // =========================================
               // ENCABEZADO PRINCIPAL
@@ -107,22 +87,18 @@ class HomePage extends ConsumerWidget {
                 const _BudgetAlert(
                   icon: Icons.warning_amber_rounded,
                   title: 'Presupuesto excedido',
-                  message:
-                      'Has gastado más de lo planeado para este mes.',
-                  backgroundColor:
-                      AppColors.errorSoft,
+                  message: 'Has gastado más de lo planeado para este mes.',
+                  backgroundColor: AppColors.errorSoft,
                   iconColor: AppColors.error,
                 ),
                 const SizedBox(height: 18),
               ] else if (percentageUsed >= 80) ...[
                 const _BudgetAlert(
-                  icon:
-                      Icons.notifications_active_outlined,
+                  icon: Icons.notifications_active_outlined,
                   title: 'Cerca del límite',
                   message:
                       'Has utilizado más del 80% de tu presupuesto mensual.',
-                  backgroundColor:
-                      AppColors.warningSoft,
+                  backgroundColor: AppColors.warningSoft,
                   iconColor: AppColors.warning,
                 ),
                 const SizedBox(height: 18),
@@ -136,17 +112,13 @@ class HomePage extends ConsumerWidget {
                 padding: const EdgeInsets.all(24),
                 decoration: BoxDecoration(
                   color: AppColors.primary,
-                  borderRadius:
-                      BorderRadius.circular(22),
+                  borderRadius: BorderRadius.circular(22),
                 ),
                 child: Column(
-                  crossAxisAlignment:
-                      CrossAxisAlignment.start,
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      available >= 0
-                          ? 'Disponible'
-                          : 'Presupuesto excedido',
+                      available >= 0 ? 'Disponible' : 'Presupuesto excedido',
                       style: const TextStyle(
                         color: Colors.white70,
                         fontSize: 15,
@@ -159,14 +131,11 @@ class HomePage extends ConsumerWidget {
                       fit: BoxFit.scaleDown,
                       alignment: Alignment.centerLeft,
                       child: Text(
-                        _moneyFormat.format(
-                          available.abs(),
-                        ),
+                        _moneyFormat.format(available.abs()),
                         style: const TextStyle(
                           color: Colors.white,
                           fontSize: 34,
-                          fontWeight:
-                              FontWeight.bold,
+                          fontWeight: FontWeight.bold,
                         ),
                       ),
                     ),
@@ -194,38 +163,28 @@ class HomePage extends ConsumerWidget {
                 padding: const EdgeInsets.all(18),
                 decoration: BoxDecoration(
                   color: AppColors.surface,
-                  borderRadius:
-                      BorderRadius.circular(18),
-                  border: Border.all(
-                    color: AppColors.border,
-                  ),
+                  borderRadius: BorderRadius.circular(18),
+                  border: Border.all(color: AppColors.border),
                 ),
                 child: Column(
-                  crossAxisAlignment:
-                      CrossAxisAlignment.start,
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Row(
-                      mainAxisAlignment:
-                          MainAxisAlignment
-                              .spaceBetween,
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
                         const Text(
                           'Presupuesto mensual',
                           style: TextStyle(
                             fontSize: 16,
-                            fontWeight:
-                                FontWeight.bold,
-                            color:
-                                AppColors.textPrimary,
+                            fontWeight: FontWeight.bold,
+                            color: AppColors.textPrimary,
                           ),
                         ),
                         Text(
-                          MonthlyBudget
-                              .currentPeriodLabel(),
+                          MonthlyBudget.currentPeriodLabel(),
                           style: const TextStyle(
                             fontSize: 12,
-                            color: AppColors
-                                .textSecondary,
+                            color: AppColors.textSecondary,
                           ),
                         ),
                       ],
@@ -236,30 +195,25 @@ class HomePage extends ConsumerWidget {
                     LinearProgressIndicator(
                       value: progress,
                       minHeight: 9,
-                      borderRadius:
-                          BorderRadius.circular(10),
-                      backgroundColor:
-                          AppColors.border,
+                      borderRadius: BorderRadius.circular(10),
+                      backgroundColor: AppColors.border,
                       color: spent > budget
                           ? AppColors.error
                           : percentageUsed >= 80
-                              ? AppColors.warning
-                              : AppColors.primary,
+                          ? AppColors.warning
+                          : AppColors.primary,
                     ),
 
                     const SizedBox(height: 14),
 
                     Row(
-                      mainAxisAlignment:
-                          MainAxisAlignment
-                              .spaceBetween,
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
                         Flexible(
                           child: Text(
                             'Gastado: ${_moneyFormat.format(spent)}',
                             style: const TextStyle(
-                              color: AppColors
-                                  .textSecondary,
+                              color: AppColors.textSecondary,
                             ),
                           ),
                         ),
@@ -267,10 +221,8 @@ class HomePage extends ConsumerWidget {
                         Text(
                           '${percentageUsed.toStringAsFixed(1)}%',
                           style: const TextStyle(
-                            fontWeight:
-                                FontWeight.bold,
-                            color:
-                                AppColors.textPrimary,
+                            fontWeight: FontWeight.bold,
+                            color: AppColors.textPrimary,
                           ),
                         ),
                       ],
@@ -299,21 +251,17 @@ class HomePage extends ConsumerWidget {
                 children: [
                   Expanded(
                     child: _SummaryCard(
-                      icon: Icons
-                          .payments_outlined,
+                      icon: Icons.payments_outlined,
                       title: 'Gastado',
-                      value:
-                          _moneyFormat.format(spent),
+                      value: _moneyFormat.format(spent),
                     ),
                   ),
                   const SizedBox(width: 12),
                   Expanded(
                     child: _SummaryCard(
-                      icon: Icons
-                          .account_balance_wallet_outlined,
+                      icon: Icons.account_balance_wallet_outlined,
                       title: 'Presupuesto',
-                      value:
-                          _moneyFormat.format(budget),
+                      value: _moneyFormat.format(budget),
                     ),
                   ),
                 ],
@@ -325,8 +273,7 @@ class HomePage extends ConsumerWidget {
               // PRÓXIMO PAGO
               // =========================================
               Row(
-                mainAxisAlignment:
-                    MainAxisAlignment.spaceBetween,
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   const Text(
                     'Próximo pago',
@@ -338,13 +285,9 @@ class HomePage extends ConsumerWidget {
                   ),
                   TextButton(
                     onPressed: () {
-                      context.go(
-                        AppRoutes.payments,
-                      );
+                      context.go(AppRoutes.payments);
                     },
-                    child: const Text(
-                      'Ver todos',
-                    ),
+                    child: const Text('Ver todos'),
                   ),
                 ],
               ),
@@ -354,9 +297,7 @@ class HomePage extends ConsumerWidget {
               if (nearestPayment == null)
                 const _NoUpcomingPayment()
               else
-                _UpcomingPaymentCard(
-                  payment: nearestPayment,
-                ),
+                _UpcomingPaymentCard(payment: nearestPayment),
 
               const SizedBox(height: 26),
 
@@ -364,8 +305,7 @@ class HomePage extends ConsumerWidget {
               // GASTOS RECIENTES
               // =========================================
               Row(
-                mainAxisAlignment:
-                    MainAxisAlignment.spaceBetween,
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   const Text(
                     'Gastos recientes',
@@ -377,13 +317,9 @@ class HomePage extends ConsumerWidget {
                   ),
                   TextButton(
                     onPressed: () {
-                      context.go(
-                        AppRoutes.expenses,
-                      );
+                      context.go(AppRoutes.expenses);
                     },
-                    child: const Text(
-                      'Ver todos',
-                    ),
+                    child: const Text('Ver todos'),
                   ),
                 ],
               ),
@@ -393,11 +329,8 @@ class HomePage extends ConsumerWidget {
               if (expenses.isEmpty)
                 const _NoRecentExpenses()
               else
-                for (final expense
-                    in expenses.take(3))
-                  _RecentExpense(
-                    expense: expense,
-                  ),
+                for (final expense in expenses.take(3))
+                  _RecentExpense(expense: expense),
             ],
           ),
         ),
@@ -405,41 +338,30 @@ class HomePage extends ConsumerWidget {
     );
   }
 
-  Payment? _getNearestPayment(
-    List<Payment> payments,
-  ) {
+  Payment? _getNearestPayment(List<Payment> payments) {
     if (payments.isEmpty) {
       return null;
     }
 
     final now = DateTime.now();
 
-    final today = DateTime(
-      now.year,
-      now.month,
-      now.day,
-    );
+    final today = DateTime(now.year, now.month, now.day);
 
-    final futurePayments = payments.where(
-      (payment) {
-        final paymentDate = DateTime(
-          payment.dueDate.year,
-          payment.dueDate.month,
-          payment.dueDate.day,
-        );
+    final futurePayments = payments.where((payment) {
+      final paymentDate = DateTime(
+        payment.dueDate.year,
+        payment.dueDate.month,
+        payment.dueDate.day,
+      );
 
-        return !paymentDate.isBefore(today);
-      },
-    ).toList();
+      return !paymentDate.isBefore(today);
+    }).toList();
 
     if (futurePayments.isEmpty) {
       return null;
     }
 
-    futurePayments.sort(
-      (a, b) =>
-          a.dueDate.compareTo(b.dueDate),
-    );
+    futurePayments.sort((a, b) => a.dueDate.compareTo(b.dueDate));
 
     return futurePayments.first;
   }
@@ -456,22 +378,14 @@ class _FinancialHeader extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.fromLTRB(
-        20,
-        18,
-        20,
-        20,
-      ),
+      padding: const EdgeInsets.fromLTRB(20, 18, 20, 20),
       decoration: BoxDecoration(
         color: AppColors.surfaceAlt,
         borderRadius: BorderRadius.circular(18),
-        border: Border.all(
-          color: AppColors.border,
-        ),
+        border: Border.all(color: AppColors.border),
       ),
       child: Column(
-        crossAxisAlignment:
-            CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
@@ -480,25 +394,21 @@ class _FinancialHeader extends StatelessWidget {
                 height: 34,
                 decoration: BoxDecoration(
                   color: AppColors.primarySoft,
-                  borderRadius:
-                      BorderRadius.circular(9),
+                  borderRadius: BorderRadius.circular(9),
                 ),
                 child: const Icon(
-                  Icons
-                      .calendar_month_outlined,
+                  Icons.calendar_month_outlined,
                   size: 18,
                   color: AppColors.primaryDark,
                 ),
               ),
               const SizedBox(width: 10),
               Text(
-                MonthlyBudget
-                    .currentPeriodLabel(),
+                MonthlyBudget.currentPeriodLabel(),
                 style: const TextStyle(
                   fontSize: 14,
                   fontWeight: FontWeight.w500,
-                  color:
-                      AppColors.textSecondary,
+                  color: AppColors.textSecondary,
                 ),
               ),
             ],
@@ -535,8 +445,7 @@ class _FinancialHeader extends StatelessWidget {
 // HOME SIN PRESUPUESTO
 // ====================================================
 
-class _HomeWithoutBudget
-    extends StatelessWidget {
+class _HomeWithoutBudget extends StatelessWidget {
   final List<Expense> expenses;
   final Payment? nearestPayment;
 
@@ -549,34 +458,22 @@ class _HomeWithoutBudget
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text(
-          'FinTrack',
-        ),
+        title: const Text('FinTrack'),
         actions: [
           IconButton(
             tooltip: 'Cerrar sesión',
             onPressed: () {
-              context.go(
-                AppRoutes.login,
-              );
+              context.go(AppRoutes.login);
             },
-            icon: const Icon(
-              Icons.logout,
-            ),
+            icon: const Icon(Icons.logout),
           ),
         ],
       ),
       body: SafeArea(
         child: SingleChildScrollView(
-          padding: const EdgeInsets.fromLTRB(
-            18,
-            16,
-            18,
-            100,
-          ),
+          padding: const EdgeInsets.fromLTRB(18, 16, 18, 100),
           child: Column(
-            crossAxisAlignment:
-                CrossAxisAlignment.start,
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               const _FinancialHeader(),
 
@@ -587,28 +484,22 @@ class _HomeWithoutBudget
                 padding: const EdgeInsets.all(24),
                 decoration: BoxDecoration(
                   color: AppColors.primarySoft,
-                  borderRadius:
-                      BorderRadius.circular(20),
-                  border: Border.all(
-                    color: AppColors.border,
-                  ),
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(color: AppColors.border),
                 ),
                 child: Column(
                   children: [
                     Container(
                       width: 68,
                       height: 68,
-                      decoration:
-                          const BoxDecoration(
+                      decoration: const BoxDecoration(
                         color: AppColors.surface,
                         shape: BoxShape.circle,
                       ),
                       child: const Icon(
-                        Icons
-                            .account_balance_wallet_outlined,
+                        Icons.account_balance_wallet_outlined,
                         size: 32,
-                        color:
-                            AppColors.primaryDark,
+                        color: AppColors.primaryDark,
                       ),
                     ),
 
@@ -619,10 +510,8 @@ class _HomeWithoutBudget
                       textAlign: TextAlign.center,
                       style: TextStyle(
                         fontSize: 20,
-                        fontWeight:
-                            FontWeight.bold,
-                        color:
-                            AppColors.textPrimary,
+                        fontWeight: FontWeight.bold,
+                        color: AppColors.textPrimary,
                       ),
                     ),
 
@@ -631,10 +520,7 @@ class _HomeWithoutBudget
                     const Text(
                       'Define cuánto dinero deseas administrar durante este mes.',
                       textAlign: TextAlign.center,
-                      style: TextStyle(
-                        color: AppColors
-                            .textSecondary,
-                      ),
+                      style: TextStyle(color: AppColors.textSecondary),
                     ),
 
                     const SizedBox(height: 22),
@@ -643,16 +529,10 @@ class _HomeWithoutBudget
                       width: double.infinity,
                       child: FilledButton.icon(
                         onPressed: () {
-                          context.go(
-                            AppRoutes.budget,
-                          );
+                          context.go(AppRoutes.budget);
                         },
-                        icon: const Icon(
-                          Icons.add,
-                        ),
-                        label: const Text(
-                          'Ingresar presupuesto',
-                        ),
+                        icon: const Icon(Icons.add),
+                        label: const Text('Ingresar presupuesto'),
                       ),
                     ),
                   ],
@@ -666,8 +546,7 @@ class _HomeWithoutBudget
                 style: TextStyle(
                   fontSize: 20,
                   fontWeight: FontWeight.bold,
-                  color:
-                      AppColors.textPrimary,
+                  color: AppColors.textPrimary,
                 ),
               ),
 
@@ -676,9 +555,7 @@ class _HomeWithoutBudget
               if (nearestPayment == null)
                 const _NoUpcomingPayment()
               else
-                _UpcomingPaymentCard(
-                  payment: nearestPayment!,
-                ),
+                _UpcomingPaymentCard(payment: nearestPayment!),
 
               const SizedBox(height: 26),
 
@@ -687,8 +564,7 @@ class _HomeWithoutBudget
                 style: TextStyle(
                   fontSize: 20,
                   fontWeight: FontWeight.bold,
-                  color:
-                      AppColors.textPrimary,
+                  color: AppColors.textPrimary,
                 ),
               ),
 
@@ -697,11 +573,8 @@ class _HomeWithoutBudget
               if (expenses.isEmpty)
                 const _NoRecentExpenses()
               else
-                for (final expense
-                    in expenses.take(3))
-                  _RecentExpense(
-                    expense: expense,
-                  ),
+                for (final expense in expenses.take(3))
+                  _RecentExpense(expense: expense),
             ],
           ),
         ),
@@ -736,34 +609,22 @@ class _BudgetAlert extends StatelessWidget {
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: backgroundColor,
-        borderRadius:
-            BorderRadius.circular(16),
-        border: Border.all(
-          color: iconColor.withValues(
-            alpha: 0.20,
-          ),
-        ),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: iconColor.withValues(alpha: 0.20)),
       ),
       child: Row(
         children: [
-          Icon(
-            icon,
-            color: iconColor,
-            size: 30,
-          ),
+          Icon(icon, color: iconColor, size: 30),
           const SizedBox(width: 14),
           Expanded(
             child: Column(
-              crossAxisAlignment:
-                  CrossAxisAlignment.start,
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
                   title,
                   style: const TextStyle(
-                    fontWeight:
-                        FontWeight.bold,
-                    color:
-                        AppColors.textPrimary,
+                    fontWeight: FontWeight.bold,
+                    color: AppColors.textPrimary,
                   ),
                 ),
                 const SizedBox(height: 3),
@@ -771,8 +632,7 @@ class _BudgetAlert extends StatelessWidget {
                   message,
                   style: const TextStyle(
                     fontSize: 13,
-                    color: AppColors
-                        .textSecondary,
+                    color: AppColors.textSecondary,
                   ),
                 ),
               ],
@@ -805,26 +665,18 @@ class _SummaryCard extends StatelessWidget {
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: AppColors.surface,
-        borderRadius:
-            BorderRadius.circular(16),
-        border: Border.all(
-          color: AppColors.border,
-        ),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppColors.border),
       ),
       child: Column(
-        crossAxisAlignment:
-            CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(
-            icon,
-            color: AppColors.primaryDark,
-          ),
+          Icon(icon, color: AppColors.primaryDark),
           const SizedBox(height: 12),
           Text(
             title,
             style: const TextStyle(
-              color:
-                  AppColors.textSecondary,
+              color: AppColors.textSecondary,
               fontSize: 13,
             ),
           ),
@@ -836,10 +688,8 @@ class _SummaryCard extends StatelessWidget {
               value,
               style: const TextStyle(
                 fontSize: 18,
-                fontWeight:
-                    FontWeight.bold,
-                color:
-                    AppColors.textPrimary,
+                fontWeight: FontWeight.bold,
+                color: AppColors.textPrimary,
               ),
             ),
           ),
@@ -853,28 +703,18 @@ class _SummaryCard extends StatelessWidget {
 // PRÓXIMO PAGO
 // ====================================================
 
-class _UpcomingPaymentCard
-    extends StatelessWidget {
+class _UpcomingPaymentCard extends StatelessWidget {
   final Payment payment;
 
-  const _UpcomingPaymentCard({
-    required this.payment,
-  });
+  const _UpcomingPaymentCard({required this.payment});
 
   @override
   Widget build(BuildContext context) {
-    final formattedDate =
-        DateFormat('dd/MM/yyyy').format(
-      payment.dueDate,
-    );
+    final formattedDate = DateFormat('dd/MM/yyyy').format(payment.dueDate);
 
     final now = DateTime.now();
 
-    final today = DateTime(
-      now.year,
-      now.month,
-      now.day,
-    );
+    final today = DateTime(now.year, now.month, now.day);
 
     final dueDate = DateTime(
       payment.dueDate.year,
@@ -882,8 +722,7 @@ class _UpcomingPaymentCard
       payment.dueDate.day,
     );
 
-    final days =
-        dueDate.difference(today).inDays;
+    final days = dueDate.difference(today).inDays;
 
     String status;
 
@@ -900,11 +739,8 @@ class _UpcomingPaymentCard
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: AppColors.surface,
-        borderRadius:
-            BorderRadius.circular(16),
-        border: Border.all(
-          color: AppColors.border,
-        ),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppColors.border),
       ),
       child: Row(
         children: [
@@ -913,8 +749,7 @@ class _UpcomingPaymentCard
             height: 48,
             decoration: BoxDecoration(
               color: AppColors.primarySoft,
-              borderRadius:
-                  BorderRadius.circular(12),
+              borderRadius: BorderRadius.circular(12),
             ),
             child: const Icon(
               Icons.calendar_month_outlined,
@@ -924,16 +759,13 @@ class _UpcomingPaymentCard
           const SizedBox(width: 14),
           Expanded(
             child: Column(
-              crossAxisAlignment:
-                  CrossAxisAlignment.start,
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
                   payment.name,
                   style: const TextStyle(
-                    fontWeight:
-                        FontWeight.bold,
-                    color:
-                        AppColors.textPrimary,
+                    fontWeight: FontWeight.bold,
+                    color: AppColors.textPrimary,
                   ),
                 ),
                 const SizedBox(height: 3),
@@ -941,21 +773,17 @@ class _UpcomingPaymentCard
                   '$formattedDate • $status',
                   style: const TextStyle(
                     fontSize: 12,
-                    color: AppColors
-                        .textSecondary,
+                    color: AppColors.textSecondary,
                   ),
                 ),
               ],
             ),
           ),
           Text(
-            _moneyFormat.format(
-              payment.amount,
-            ),
+            _moneyFormat.format(payment.amount),
             style: const TextStyle(
               fontWeight: FontWeight.bold,
-              color:
-                  AppColors.textPrimary,
+              color: AppColors.textPrimary,
             ),
           ),
         ],
@@ -964,8 +792,7 @@ class _UpcomingPaymentCard
   }
 }
 
-class _NoUpcomingPayment
-    extends StatelessWidget {
+class _NoUpcomingPayment extends StatelessWidget {
   const _NoUpcomingPayment();
 
   @override
@@ -975,26 +802,17 @@ class _NoUpcomingPayment
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
         color: AppColors.surfaceAlt,
-        borderRadius:
-            BorderRadius.circular(14),
-        border: Border.all(
-          color: AppColors.border,
-        ),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: AppColors.border),
       ),
       child: const Row(
         children: [
-          Icon(
-            Icons.event_available_outlined,
-            color: AppColors.primaryDark,
-          ),
+          Icon(Icons.event_available_outlined, color: AppColors.primaryDark),
           SizedBox(width: 12),
           Expanded(
             child: Text(
               'No tienes pagos próximos registrados.',
-              style: TextStyle(
-                color:
-                    AppColors.textSecondary,
-              ),
+              style: TextStyle(color: AppColors.textSecondary),
             ),
           ),
         ],
@@ -1007,33 +825,22 @@ class _NoUpcomingPayment
 // GASTOS RECIENTES
 // ====================================================
 
-class _RecentExpense
-    extends StatelessWidget {
+class _RecentExpense extends StatelessWidget {
   final Expense expense;
 
-  const _RecentExpense({
-    required this.expense,
-  });
+  const _RecentExpense({required this.expense});
 
   @override
   Widget build(BuildContext context) {
-    final categoryColor =
-        expenseCategoryColor(
-      expense.category,
-    );
+    final categoryColor = expenseCategoryColor(expense.category);
 
     return Container(
-      margin: const EdgeInsets.only(
-        bottom: 10,
-      ),
+      margin: const EdgeInsets.only(bottom: 10),
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: AppColors.surface,
-        borderRadius:
-            BorderRadius.circular(14),
-        border: Border.all(
-          color: AppColors.border,
-        ),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: AppColors.border),
       ),
       child: Row(
         children: [
@@ -1041,33 +848,24 @@ class _RecentExpense
             width: 44,
             height: 44,
             decoration: BoxDecoration(
-              color:
-                  categoryColor.withValues(
-                alpha: 0.10,
-              ),
-              borderRadius:
-                  BorderRadius.circular(12),
+              color: categoryColor.withValues(alpha: 0.10),
+              borderRadius: BorderRadius.circular(12),
             ),
             child: Icon(
-              expenseCategoryIcon(
-                expense.category,
-              ),
+              expenseCategoryIcon(expense.category),
               color: categoryColor,
             ),
           ),
           const SizedBox(width: 14),
           Expanded(
             child: Column(
-              crossAxisAlignment:
-                  CrossAxisAlignment.start,
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
                   expense.name,
                   style: const TextStyle(
-                    fontWeight:
-                        FontWeight.bold,
-                    color:
-                        AppColors.textPrimary,
+                    fontWeight: FontWeight.bold,
+                    color: AppColors.textPrimary,
                   ),
                 ),
                 const SizedBox(height: 2),
@@ -1075,21 +873,17 @@ class _RecentExpense
                   expense.category.label,
                   style: const TextStyle(
                     fontSize: 12,
-                    color: AppColors
-                        .textSecondary,
+                    color: AppColors.textSecondary,
                   ),
                 ),
               ],
             ),
           ),
           Text(
-            _moneyFormat.format(
-              expense.amount,
-            ),
+            _moneyFormat.format(expense.amount),
             style: const TextStyle(
               fontWeight: FontWeight.bold,
-              color:
-                  AppColors.textPrimary,
+              color: AppColors.textPrimary,
             ),
           ),
         ],
@@ -1098,8 +892,7 @@ class _RecentExpense
   }
 }
 
-class _NoRecentExpenses
-    extends StatelessWidget {
+class _NoRecentExpenses extends StatelessWidget {
   const _NoRecentExpenses();
 
   @override
@@ -1109,11 +902,8 @@ class _NoRecentExpenses
       padding: const EdgeInsets.all(22),
       decoration: BoxDecoration(
         color: AppColors.surfaceAlt,
-        borderRadius:
-            BorderRadius.circular(14),
-        border: Border.all(
-          color: AppColors.border,
-        ),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: AppColors.border),
       ),
       child: const Column(
         children: [
@@ -1134,11 +924,7 @@ class _NoRecentExpenses
           Text(
             'Tus últimos gastos aparecerán aquí.',
             textAlign: TextAlign.center,
-            style: TextStyle(
-              fontSize: 13,
-              color:
-                  AppColors.textSecondary,
-            ),
+            style: TextStyle(fontSize: 13, color: AppColors.textSecondary),
           ),
         ],
       ),

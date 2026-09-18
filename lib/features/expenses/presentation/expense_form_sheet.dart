@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:intl/intl.dart';
 
+import '../../../app/theme.dart';
 import '../domain/expense.dart';
 import '../domain/expense_category.dart';
 import 'expense_category_ui.dart';
@@ -10,7 +12,11 @@ import 'expenses_provider.dart';
 class ExpenseFormSheet extends ConsumerStatefulWidget {
   final Expense? expense;
 
-  const ExpenseFormSheet({super.key, this.expense});
+  // Fecha inicial utilizada cuando estamos creando
+  // un gasto desde un mes anterior.
+  final DateTime? initialDate;
+
+  const ExpenseFormSheet({super.key, this.expense, this.initialDate});
 
   @override
   ConsumerState<ExpenseFormSheet> createState() => _ExpenseFormSheetState();
@@ -23,6 +29,7 @@ class _ExpenseFormSheetState extends ConsumerState<ExpenseFormSheet> {
   late final TextEditingController _amountController;
 
   late ExpenseCategory _selectedCategory;
+  late DateTime _selectedDate;
 
   bool get isEditing => widget.expense != null;
 
@@ -39,6 +46,9 @@ class _ExpenseFormSheetState extends ConsumerState<ExpenseFormSheet> {
     );
 
     _selectedCategory = widget.expense?.category ?? ExpenseCategory.other;
+
+    _selectedDate =
+        widget.expense?.date ?? widget.initialDate ?? DateTime.now();
   }
 
   @override
@@ -47,6 +57,28 @@ class _ExpenseFormSheetState extends ConsumerState<ExpenseFormSheet> {
     _amountController.dispose();
 
     super.dispose();
+  }
+
+  Future<void> _selectDate() async {
+    final now = DateTime.now();
+
+    final date = await showDatePicker(
+      context: context,
+      initialDate: _selectedDate,
+      firstDate: DateTime(2020, 1, 1),
+      lastDate: now,
+      helpText: 'Selecciona la fecha del gasto',
+      cancelText: 'Cancelar',
+      confirmText: 'Seleccionar',
+    );
+
+    if (!mounted || date == null) {
+      return;
+    }
+
+    setState(() {
+      _selectedDate = date;
+    });
   }
 
   void _save() {
@@ -68,11 +100,17 @@ class _ExpenseFormSheetState extends ConsumerState<ExpenseFormSheet> {
             name: name,
             amount: amount,
             category: _selectedCategory,
+            date: _selectedDate,
           );
     } else {
       ref
           .read(expensesProvider.notifier)
-          .addExpense(name: name, amount: amount, category: _selectedCategory);
+          .addExpense(
+            name: name,
+            amount: amount,
+            category: _selectedCategory,
+            date: _selectedDate,
+          );
     }
 
     Navigator.of(context).pop();
@@ -120,6 +158,8 @@ class _ExpenseFormSheetState extends ConsumerState<ExpenseFormSheet> {
 
   @override
   Widget build(BuildContext context) {
+    final formattedDate = DateFormat('dd/MM/yyyy').format(_selectedDate);
+
     return Padding(
       padding: EdgeInsets.only(
         left: 20,
@@ -144,6 +184,7 @@ class _ExpenseFormSheetState extends ConsumerState<ExpenseFormSheet> {
 
               const SizedBox(height: 20),
 
+              // NOMBRE
               TextFormField(
                 controller: _nameController,
                 textCapitalization: TextCapitalization.sentences,
@@ -156,13 +197,14 @@ class _ExpenseFormSheetState extends ConsumerState<ExpenseFormSheet> {
                 },
                 decoration: const InputDecoration(
                   labelText: 'Nombre del gasto',
-                  hintText: 'Ej. Comida',
+                  hintText: 'Ej. Supermercado',
                   prefixIcon: Icon(Icons.edit_outlined),
                 ),
               ),
 
               const SizedBox(height: 16),
 
+              // MONTO
               TextFormField(
                 controller: _amountController,
                 keyboardType: const TextInputType.numberWithOptions(
@@ -197,6 +239,7 @@ class _ExpenseFormSheetState extends ConsumerState<ExpenseFormSheet> {
 
               const SizedBox(height: 16),
 
+              // CATEGORÍA
               DropdownButtonFormField<ExpenseCategory>(
                 initialValue: _selectedCategory,
                 decoration: const InputDecoration(
@@ -230,8 +273,25 @@ class _ExpenseFormSheetState extends ConsumerState<ExpenseFormSheet> {
                 },
               ),
 
+              const SizedBox(height: 16),
+
+              // FECHA
+              InkWell(
+                onTap: _selectDate,
+                borderRadius: BorderRadius.circular(12),
+                child: InputDecorator(
+                  decoration: const InputDecoration(
+                    labelText: 'Fecha del gasto',
+                    prefixIcon: Icon(Icons.calendar_month_outlined),
+                    suffixIcon: Icon(Icons.chevron_right),
+                  ),
+                  child: Text(formattedDate),
+                ),
+              ),
+
               const SizedBox(height: 24),
 
+              // GUARDAR
               SizedBox(
                 width: double.infinity,
                 child: FilledButton.icon(
@@ -248,10 +308,13 @@ class _ExpenseFormSheetState extends ConsumerState<ExpenseFormSheet> {
                   width: double.infinity,
                   child: TextButton.icon(
                     onPressed: _delete,
-                    icon: const Icon(Icons.delete_outline, color: Colors.red),
+                    icon: const Icon(
+                      Icons.delete_outline,
+                      color: AppColors.error,
+                    ),
                     label: const Text(
                       'Eliminar gasto',
-                      style: TextStyle(color: Colors.red),
+                      style: TextStyle(color: AppColors.error),
                     ),
                   ),
                 ),

@@ -1,11 +1,21 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../data/repositories/memory_expense_repository.dart';
 import '../domain/expense.dart';
+import '../domain/repositories/expense_repository.dart';
+
+final expenseRepositoryProvider = Provider<ExpenseRepository>((ref) {
+  return MemoryExpenseRepository();
+});
 
 class ExpensesNotifier extends Notifier<List<Expense>> {
+  ExpenseRepository get _repository {
+    return ref.read(expenseRepositoryProvider);
+  }
+
   @override
   List<Expense> build() {
-    return [];
+    return _repository.getExpenses();
   }
 
   void addExpense({required String name, required double amount}) {
@@ -16,7 +26,9 @@ class ExpensesNotifier extends Notifier<List<Expense>> {
       date: DateTime.now(),
     );
 
-    state = [expense, ...state];
+    _repository.addExpense(expense);
+
+    state = _repository.getExpenses();
   }
 
   void updateExpense({
@@ -24,17 +36,19 @@ class ExpensesNotifier extends Notifier<List<Expense>> {
     required String name,
     required double amount,
   }) {
-    state = [
-      for (final expense in state)
-        if (expense.id == id)
-          expense.copyWith(name: name, amount: amount)
-        else
-          expense,
-    ];
+    final currentExpense = state.firstWhere((expense) => expense.id == id);
+
+    final updatedExpense = currentExpense.copyWith(name: name, amount: amount);
+
+    _repository.updateExpense(updatedExpense);
+
+    state = _repository.getExpenses();
   }
 
   void deleteExpense(String id) {
-    state = state.where((expense) => expense.id != id).toList();
+    _repository.deleteExpense(id);
+
+    state = _repository.getExpenses();
   }
 }
 

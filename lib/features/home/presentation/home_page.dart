@@ -1,12 +1,23 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:intl/intl.dart';
 
 import '../../../app/router.dart';
 import '../../../app/theme.dart';
 import '../../budget/presentation/budget_provider.dart';
 import '../../expenses/domain/expense.dart';
+import '../../expenses/domain/expense_category.dart';
+import '../../expenses/presentation/expense_category_ui.dart';
 import '../../expenses/presentation/expenses_provider.dart';
+import '../../payments/domain/payment.dart';
+import '../../payments/presentation/payments_provider.dart';
+
+final NumberFormat _moneyFormat = NumberFormat.currency(
+  locale: 'es_MX',
+  symbol: '\$',
+  decimalDigits: 2,
+);
 
 class HomePage extends ConsumerWidget {
   const HomePage({super.key});
@@ -16,14 +27,22 @@ class HomePage extends ConsumerWidget {
     final budget = ref.watch(budgetProvider);
     final spent = ref.watch(totalExpensesProvider);
     final expenses = ref.watch(expensesProvider);
+    final payments = ref.watch(paymentsProvider);
+
+    final nearestPayment = _getNearestPayment(payments);
 
     if (budget == null) {
-      return _HomeWithoutBudget(expenses: expenses);
+      return _HomeWithoutBudget(
+        expenses: expenses,
+        nearestPayment: nearestPayment,
+      );
     }
 
     final double available = budget - spent;
 
     final double progress = budget <= 0 ? 0 : (spent / budget).clamp(0.0, 1.0);
+
+    final double percentageUsed = budget <= 0 ? 0 : (spent / budget) * 100;
 
     return Scaffold(
       appBar: AppBar(
@@ -43,68 +62,119 @@ class HomePage extends ConsumerWidget {
       ),
       body: SafeArea(
         child: SingleChildScrollView(
-          padding: const EdgeInsets.all(20),
+          padding: const EdgeInsets.fromLTRB(18, 16, 18, 100),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text(
-                'Hola 👋',
-                style: TextStyle(fontSize: 16, color: AppColors.textSecondary),
-              ),
-              const SizedBox(height: 4),
-              const Text(
-                'Resumen de tus finanzas',
-                style: TextStyle(
-                  fontSize: 24,
-                  fontWeight: FontWeight.bold,
-                  color: AppColors.textPrimary,
-                ),
-              ),
-              const SizedBox(height: 24),
-
-              // DISPONIBLE
+              // ENCABEZADO
               Container(
                 width: double.infinity,
-                padding: const EdgeInsets.all(22),
+                padding: const EdgeInsets.fromLTRB(20, 18, 20, 22),
                 decoration: BoxDecoration(
-                  color: AppColors.primary,
-                  borderRadius: BorderRadius.circular(20),
+                  color: AppColors.surfaceAlt,
+                  borderRadius: BorderRadius.circular(18),
+                  border: Border.all(color: AppColors.border),
                 ),
-                child: Column(
+                child: const Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text(
-                      'Disponible',
-                      style: TextStyle(color: Colors.white70, fontSize: 15),
-                    ),
-                    const SizedBox(height: 6),
                     Text(
-                      '\$${available.toStringAsFixed(2)}',
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 32,
-                        fontWeight: FontWeight.bold,
+                      'Hola 👋',
+                      style: TextStyle(
+                        fontSize: 16,
+                        color: AppColors.textSecondary,
                       ),
                     ),
-                    const SizedBox(height: 4),
+                    SizedBox(height: 6),
                     Text(
-                      'de \$${budget.toStringAsFixed(2)}',
-                      style: const TextStyle(color: Colors.white70),
+                      'Resumen de tus finanzas',
+                      style: TextStyle(
+                        fontSize: 24,
+                        fontWeight: FontWeight.bold,
+                        color: AppColors.textPrimary,
+                      ),
                     ),
                   ],
                 ),
               ),
 
-              const SizedBox(height: 22),
+              const SizedBox(height: 20),
 
-              // PRESUPUESTO MENSUAL
+              // ALERTAS
+              if (spent > budget) ...[
+                const _BudgetAlert(
+                  icon: Icons.warning_amber_rounded,
+                  title: 'Presupuesto excedido',
+                  message: 'Has gastado más de lo planeado para este mes.',
+                  backgroundColor: AppColors.errorSoft,
+                  iconColor: AppColors.error,
+                ),
+                const SizedBox(height: 18),
+              ] else if (percentageUsed >= 80) ...[
+                const _BudgetAlert(
+                  icon: Icons.notifications_active_outlined,
+                  title: 'Estás cerca de tu límite',
+                  message:
+                      'Ya utilizaste más del 80% de tu presupuesto mensual.',
+                  backgroundColor: AppColors.warningSoft,
+                  iconColor: AppColors.warning,
+                ),
+                const SizedBox(height: 18),
+              ],
+
+              // TARJETA PRINCIPAL
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(24),
+                decoration: BoxDecoration(
+                  color: AppColors.primary,
+                  borderRadius: BorderRadius.circular(22),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      available >= 0 ? 'Disponible' : 'Presupuesto excedido',
+                      style: const TextStyle(
+                        color: Colors.white70,
+                        fontSize: 15,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    FittedBox(
+                      fit: BoxFit.scaleDown,
+                      alignment: Alignment.centerLeft,
+                      child: Text(
+                        _moneyFormat.format(available.abs()),
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 34,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      'de ${_moneyFormat.format(budget)}',
+                      style: const TextStyle(
+                        color: Colors.white70,
+                        fontSize: 14,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
+              const SizedBox(height: 20),
+
+              // PRESUPUESTO
               Container(
                 width: double.infinity,
                 padding: const EdgeInsets.all(18),
                 decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: const Color(0xFFE5E7EB)),
+                  color: AppColors.surface,
+                  borderRadius: BorderRadius.circular(18),
+                  border: Border.all(color: AppColors.border),
                 ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -114,29 +184,40 @@ class HomePage extends ConsumerWidget {
                       style: TextStyle(
                         fontSize: 16,
                         fontWeight: FontWeight.bold,
+                        color: AppColors.textPrimary,
                       ),
                     ),
-                    const SizedBox(height: 14),
+                    const SizedBox(height: 16),
                     LinearProgressIndicator(
                       value: progress,
-                      minHeight: 10,
+                      minHeight: 9,
                       borderRadius: BorderRadius.circular(10),
-                      backgroundColor: const Color(0xFFE5E7EB),
-                      color: AppColors.primary,
+                      backgroundColor: AppColors.border,
+                      color: spent > budget
+                          ? AppColors.error
+                          : percentageUsed >= 80
+                          ? AppColors.warning
+                          : AppColors.primary,
                     ),
-                    const SizedBox(height: 12),
+                    const SizedBox(height: 14),
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Text(
-                          'Gastado: \$${spent.toStringAsFixed(2)}',
-                          style: const TextStyle(
-                            color: AppColors.textSecondary,
+                        Flexible(
+                          child: Text(
+                            'Gastado: ${_moneyFormat.format(spent)}',
+                            style: const TextStyle(
+                              color: AppColors.textSecondary,
+                            ),
                           ),
                         ),
+                        const SizedBox(width: 10),
                         Text(
-                          '${(progress * 100).toStringAsFixed(1)}%',
-                          style: const TextStyle(fontWeight: FontWeight.bold),
+                          '${percentageUsed.toStringAsFixed(1)}%',
+                          style: const TextStyle(
+                            fontWeight: FontWeight.bold,
+                            color: AppColors.textPrimary,
+                          ),
                         ),
                       ],
                     ),
@@ -144,11 +225,15 @@ class HomePage extends ConsumerWidget {
                 ),
               ),
 
-              const SizedBox(height: 24),
+              const SizedBox(height: 26),
 
               const Text(
                 'Resumen',
-                style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                style: TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                  color: AppColors.textPrimary,
+                ),
               ),
 
               const SizedBox(height: 14),
@@ -159,7 +244,7 @@ class HomePage extends ConsumerWidget {
                     child: _SummaryCard(
                       icon: Icons.arrow_downward,
                       title: 'Gastado',
-                      value: '\$${spent.toStringAsFixed(0)}',
+                      value: _moneyFormat.format(spent),
                     ),
                   ),
                   const SizedBox(width: 12),
@@ -167,49 +252,123 @@ class HomePage extends ConsumerWidget {
                     child: _SummaryCard(
                       icon: Icons.account_balance_wallet_outlined,
                       title: 'Presupuesto',
-                      value: '\$${budget.toStringAsFixed(0)}',
+                      value: _moneyFormat.format(budget),
                     ),
                   ),
                 ],
               ),
 
-              const SizedBox(height: 24),
+              const SizedBox(height: 26),
 
-              const Text(
-                'Gastos recientes',
-                style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+              // PRÓXIMO PAGO
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text(
+                    'Próximo pago',
+                    style: TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.bold,
+                      color: AppColors.textPrimary,
+                    ),
+                  ),
+                  TextButton(
+                    onPressed: () {
+                      context.go(AppRoutes.payments);
+                    },
+                    child: const Text('Ver todos'),
+                  ),
+                ],
               ),
 
-              const SizedBox(height: 12),
+              const SizedBox(height: 8),
+
+              if (nearestPayment == null)
+                const _NoUpcomingPayment()
+              else
+                _UpcomingPaymentCard(payment: nearestPayment),
+
+              const SizedBox(height: 26),
+
+              // GASTOS RECIENTES
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text(
+                    'Gastos recientes',
+                    style: TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.bold,
+                      color: AppColors.textPrimary,
+                    ),
+                  ),
+                  TextButton(
+                    onPressed: () {
+                      context.go(AppRoutes.expenses);
+                    },
+                    child: const Text('Ver todos'),
+                  ),
+                ],
+              ),
+
+              const SizedBox(height: 8),
 
               if (expenses.isEmpty)
                 const _NoRecentExpenses()
               else
                 for (final expense in expenses.take(3))
                   _RecentExpense(expense: expense),
-
-              const SizedBox(height: 20),
             ],
           ),
         ),
       ),
     );
   }
+
+  Payment? _getNearestPayment(List<Payment> payments) {
+    if (payments.isEmpty) {
+      return null;
+    }
+
+    final today = DateTime.now();
+
+    final currentDay = DateTime(today.year, today.month, today.day);
+
+    final futurePayments = payments.where((payment) {
+      final date = DateTime(
+        payment.dueDate.year,
+        payment.dueDate.month,
+        payment.dueDate.day,
+      );
+
+      return !date.isBefore(currentDay);
+    }).toList();
+
+    if (futurePayments.isEmpty) {
+      return null;
+    }
+
+    futurePayments.sort((a, b) => a.dueDate.compareTo(b.dueDate));
+
+    return futurePayments.first;
+  }
 }
 
-// ----------------------------------------------------
-// HOME CUANDO EL USUARIO TODAVÍA NO TIENE PRESUPUESTO
-// ----------------------------------------------------
+// ====================================================
+// HOME SIN PRESUPUESTO
+// ====================================================
 
-class _HomeWithoutBudget extends ConsumerWidget {
+class _HomeWithoutBudget extends StatelessWidget {
   final List<Expense> expenses;
+  final Payment? nearestPayment;
 
-  const _HomeWithoutBudget({required this.expenses});
+  const _HomeWithoutBudget({
+    required this.expenses,
+    required this.nearestPayment,
+  });
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final spent = ref.watch(totalExpensesProvider);
-
+  Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
         title: const Text(
@@ -228,34 +387,50 @@ class _HomeWithoutBudget extends ConsumerWidget {
       ),
       body: SafeArea(
         child: SingleChildScrollView(
-          padding: const EdgeInsets.all(20),
+          padding: const EdgeInsets.fromLTRB(18, 16, 18, 100),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text(
-                'Hola 👋',
-                style: TextStyle(fontSize: 16, color: AppColors.textSecondary),
-              ),
-
-              const SizedBox(height: 4),
-
-              const Text(
-                'Comencemos con tus finanzas',
-                style: TextStyle(
-                  fontSize: 24,
-                  fontWeight: FontWeight.bold,
-                  color: AppColors.textPrimary,
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.fromLTRB(20, 18, 20, 22),
+                decoration: BoxDecoration(
+                  color: AppColors.surfaceAlt,
+                  borderRadius: BorderRadius.circular(18),
+                  border: Border.all(color: AppColors.border),
+                ),
+                child: const Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Hola 👋',
+                      style: TextStyle(
+                        fontSize: 16,
+                        color: AppColors.textSecondary,
+                      ),
+                    ),
+                    SizedBox(height: 6),
+                    Text(
+                      'Comencemos con tus finanzas',
+                      style: TextStyle(
+                        fontSize: 24,
+                        fontWeight: FontWeight.bold,
+                        color: AppColors.textPrimary,
+                      ),
+                    ),
+                  ],
                 ),
               ),
 
-              const SizedBox(height: 24),
+              const SizedBox(height: 20),
 
               Container(
                 width: double.infinity,
                 padding: const EdgeInsets.all(24),
                 decoration: BoxDecoration(
-                  color: const Color(0xFFE9F6EF),
+                  color: AppColors.primarySoft,
                   borderRadius: BorderRadius.circular(20),
+                  border: Border.all(color: AppColors.border),
                 ),
                 child: Column(
                   children: [
@@ -263,18 +438,16 @@ class _HomeWithoutBudget extends ConsumerWidget {
                       width: 70,
                       height: 70,
                       decoration: const BoxDecoration(
-                        color: Colors.white,
+                        color: AppColors.surface,
                         shape: BoxShape.circle,
                       ),
                       child: const Icon(
                         Icons.account_balance_wallet_outlined,
                         size: 34,
-                        color: AppColors.primary,
+                        color: AppColors.primaryDark,
                       ),
                     ),
-
                     const SizedBox(height: 18),
-
                     const Text(
                       'Ingresa tu presupuesto de este mes :)',
                       textAlign: TextAlign.center,
@@ -284,17 +457,13 @@ class _HomeWithoutBudget extends ConsumerWidget {
                         color: AppColors.textPrimary,
                       ),
                     ),
-
                     const SizedBox(height: 8),
-
                     const Text(
                       'Define cuánto dinero deseas administrar para comenzar a controlar tus gastos.',
                       textAlign: TextAlign.center,
                       style: TextStyle(color: AppColors.textSecondary),
                     ),
-
                     const SizedBox(height: 22),
-
                     SizedBox(
                       width: double.infinity,
                       child: FilledButton.icon(
@@ -309,47 +478,33 @@ class _HomeWithoutBudget extends ConsumerWidget {
                 ),
               ),
 
-              if (spent > 0) ...[
-                const SizedBox(height: 24),
+              const SizedBox(height: 26),
 
-                Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.all(18),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: const Color(0xFFE5E7EB)),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text(
-                        'Gastos registrados',
-                        style: TextStyle(fontWeight: FontWeight.bold),
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        '\$${spent.toStringAsFixed(2)}',
-                        style: const TextStyle(
-                          fontSize: 26,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      const Text(
-                        'Configura tu presupuesto para conocer cuánto dinero tienes disponible.',
-                        style: TextStyle(color: AppColors.textSecondary),
-                      ),
-                    ],
-                  ),
+              const Text(
+                'Próximo pago',
+                style: TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                  color: AppColors.textPrimary,
                 ),
-              ],
+              ),
 
-              const SizedBox(height: 24),
+              const SizedBox(height: 12),
+
+              if (nearestPayment == null)
+                const _NoUpcomingPayment()
+              else
+                _UpcomingPaymentCard(payment: nearestPayment!),
+
+              const SizedBox(height: 26),
 
               const Text(
                 'Gastos recientes',
-                style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                style: TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                  color: AppColors.textPrimary,
+                ),
               ),
 
               const SizedBox(height: 12),
@@ -359,8 +514,6 @@ class _HomeWithoutBudget extends ConsumerWidget {
               else
                 for (final expense in expenses.take(3))
                   _RecentExpense(expense: expense),
-
-              const SizedBox(height: 20),
             ],
           ),
         ),
@@ -369,7 +522,70 @@ class _HomeWithoutBudget extends ConsumerWidget {
   }
 }
 
-// ---------------- RESUMEN ----------------
+// ====================================================
+// ALERTA
+// ====================================================
+
+class _BudgetAlert extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final String message;
+  final Color backgroundColor;
+  final Color iconColor;
+
+  const _BudgetAlert({
+    required this.icon,
+    required this.title,
+    required this.message,
+    required this.backgroundColor,
+    required this.iconColor,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: backgroundColor,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: iconColor.withValues(alpha: 0.20)),
+      ),
+      child: Row(
+        children: [
+          Icon(icon, color: iconColor, size: 30),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.bold,
+                    color: AppColors.textPrimary,
+                  ),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  message,
+                  style: const TextStyle(
+                    fontSize: 13,
+                    color: AppColors.textSecondary,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ====================================================
+// RESUMEN
+// ====================================================
 
 class _SummaryCard extends StatelessWidget {
   final IconData icon;
@@ -387,14 +603,14 @@ class _SummaryCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: AppColors.surface,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFFE5E7EB)),
+        border: Border.all(color: AppColors.border),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(icon, color: AppColors.primary),
+          Icon(icon, color: AppColors.primaryDark),
           const SizedBox(height: 12),
           Text(
             title,
@@ -404,9 +620,17 @@ class _SummaryCard extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 4),
-          Text(
-            value,
-            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.centerLeft,
+            child: Text(
+              value,
+              style: const TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+                color: AppColors.textPrimary,
+              ),
+            ),
           ),
         ],
       ),
@@ -414,38 +638,121 @@ class _SummaryCard extends StatelessWidget {
   }
 }
 
-// ---------------- SIN GASTOS ----------------
+// ====================================================
+// PRÓXIMO PAGO
+// ====================================================
 
-class _NoRecentExpenses extends StatelessWidget {
-  const _NoRecentExpenses();
+class _UpcomingPaymentCard extends StatelessWidget {
+  final Payment payment;
+
+  const _UpcomingPaymentCard({required this.payment});
+
+  @override
+  Widget build(BuildContext context) {
+    final formattedDate = DateFormat('dd/MM/yyyy').format(payment.dueDate);
+
+    final today = DateTime.now();
+
+    final currentDay = DateTime(today.year, today.month, today.day);
+
+    final dueDay = DateTime(
+      payment.dueDate.year,
+      payment.dueDate.month,
+      payment.dueDate.day,
+    );
+
+    final days = dueDay.difference(currentDay).inDays;
+
+    String status;
+
+    if (days == 0) {
+      status = 'Vence hoy';
+    } else if (days == 1) {
+      status = 'Vence mañana';
+    } else {
+      status = 'En $days días';
+    }
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 48,
+            height: 48,
+            decoration: BoxDecoration(
+              color: AppColors.primarySoft,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: const Icon(
+              Icons.calendar_month_outlined,
+              color: AppColors.primaryDark,
+            ),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  payment.name,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.bold,
+                    color: AppColors.textPrimary,
+                  ),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  '$formattedDate • $status',
+                  style: const TextStyle(
+                    fontSize: 12,
+                    color: AppColors.textSecondary,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          Text(
+            _moneyFormat.format(payment.amount),
+            style: const TextStyle(
+              fontWeight: FontWeight.bold,
+              color: AppColors.textPrimary,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _NoUpcomingPayment extends StatelessWidget {
+  const _NoUpcomingPayment();
 
   @override
   Widget build(BuildContext context) {
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 26),
+      padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: AppColors.surfaceAlt,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: const Color(0xFFE5E7EB)),
+        border: Border.all(color: AppColors.border),
       ),
-      child: const Column(
+      child: const Row(
         children: [
-          Icon(
-            Icons.receipt_long_outlined,
-            size: 36,
-            color: AppColors.textSecondary,
-          ),
-          SizedBox(height: 10),
-          Text(
-            'No hay gastos registrados',
-            style: TextStyle(fontWeight: FontWeight.bold),
-          ),
-          SizedBox(height: 4),
-          Text(
-            'Tus últimos gastos aparecerán aquí.',
-            textAlign: TextAlign.center,
-            style: TextStyle(fontSize: 13, color: AppColors.textSecondary),
+          Icon(Icons.event_available_outlined, color: AppColors.primaryDark),
+          SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              'No tienes pagos próximos registrados.',
+              style: TextStyle(color: AppColors.textSecondary),
+            ),
           ),
         ],
       ),
@@ -453,7 +760,9 @@ class _NoRecentExpenses extends StatelessWidget {
   }
 }
 
-// ---------------- GASTO RECIENTE ----------------
+// ====================================================
+// GASTOS RECIENTES
+// ====================================================
 
 class _RecentExpense extends StatelessWidget {
   final Expense expense;
@@ -462,13 +771,15 @@ class _RecentExpense extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final categoryColor = expenseCategoryColor(expense.category);
+
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: AppColors.surface,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: const Color(0xFFE5E7EB)),
+        border: Border.all(color: AppColors.border),
       ),
       child: Row(
         children: [
@@ -476,39 +787,83 @@ class _RecentExpense extends StatelessWidget {
             width: 44,
             height: 44,
             decoration: BoxDecoration(
-              color: const Color(0xFFE9F6EF),
+              color: categoryColor.withValues(alpha: 0.10),
               borderRadius: BorderRadius.circular(12),
             ),
-            child: const Icon(
-              Icons.payments_outlined,
-              color: AppColors.primary,
+            child: Icon(
+              expenseCategoryIcon(expense.category),
+              color: categoryColor,
             ),
           ),
-
           const SizedBox(width: 14),
-
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
                   expense.name,
-                  style: const TextStyle(fontWeight: FontWeight.bold),
+                  style: const TextStyle(
+                    fontWeight: FontWeight.bold,
+                    color: AppColors.textPrimary,
+                  ),
                 ),
-                const Text(
-                  'Reciente',
-                  style: TextStyle(
-                    color: AppColors.textSecondary,
+                const SizedBox(height: 2),
+                Text(
+                  expense.category.label,
+                  style: const TextStyle(
                     fontSize: 12,
+                    color: AppColors.textSecondary,
                   ),
                 ),
               ],
             ),
           ),
-
           Text(
-            '\$${expense.amount.toStringAsFixed(2)}',
-            style: const TextStyle(fontWeight: FontWeight.bold),
+            _moneyFormat.format(expense.amount),
+            style: const TextStyle(
+              fontWeight: FontWeight.bold,
+              color: AppColors.textPrimary,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _NoRecentExpenses extends StatelessWidget {
+  const _NoRecentExpenses();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(22),
+      decoration: BoxDecoration(
+        color: AppColors.surfaceAlt,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: const Column(
+        children: [
+          Icon(
+            Icons.receipt_long_outlined,
+            size: 36,
+            color: AppColors.primaryDark,
+          ),
+          SizedBox(height: 10),
+          Text(
+            'No hay gastos registrados',
+            style: TextStyle(
+              fontWeight: FontWeight.bold,
+              color: AppColors.textPrimary,
+            ),
+          ),
+          SizedBox(height: 4),
+          Text(
+            'Tus últimos gastos aparecerán aquí.',
+            textAlign: TextAlign.center,
+            style: TextStyle(fontSize: 13, color: AppColors.textSecondary),
           ),
         ],
       ),

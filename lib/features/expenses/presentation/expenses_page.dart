@@ -4,6 +4,8 @@ import 'package:intl/intl.dart';
 
 import '../../../app/theme.dart';
 import '../domain/expense.dart';
+import '../domain/expense_category.dart';
+import 'expense_category_ui.dart';
 import 'expense_form_sheet.dart';
 import 'expenses_provider.dart';
 
@@ -55,6 +57,7 @@ class ExpensesPage extends ConsumerWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
+                    // TOTAL GASTADO
                     Container(
                       width: double.infinity,
                       padding: const EdgeInsets.all(20),
@@ -67,7 +70,10 @@ class ExpensesPage extends ConsumerWidget {
                         children: [
                           const Text(
                             'Total gastado',
-                            style: TextStyle(color: Colors.white70),
+                            style: TextStyle(
+                              color: Colors.white70,
+                              fontSize: 14,
+                            ),
                           ),
                           const SizedBox(height: 6),
                           Text(
@@ -81,7 +87,7 @@ class ExpensesPage extends ConsumerWidget {
                           const SizedBox(height: 4),
                           Text(
                             '${expenses.length} '
-                            '${expenses.length == 1 ? 'gasto' : 'gastos'} registrados',
+                            '${expenses.length == 1 ? 'gasto registrado' : 'gastos registrados'}',
                             style: const TextStyle(color: Colors.white70),
                           ),
                         ],
@@ -90,16 +96,29 @@ class ExpensesPage extends ConsumerWidget {
 
                     const SizedBox(height: 24),
 
+                    // TÍTULO LISTA
                     const Text(
                       'Mis gastos',
                       style: TextStyle(
                         fontSize: 20,
                         fontWeight: FontWeight.bold,
+                        color: AppColors.textPrimary,
                       ),
                     ),
 
-                    const SizedBox(height: 12),
+                    const SizedBox(height: 6),
 
+                    const Text(
+                      'Toca un gasto para editarlo o eliminarlo.',
+                      style: TextStyle(
+                        color: AppColors.textSecondary,
+                        fontSize: 13,
+                      ),
+                    ),
+
+                    const SizedBox(height: 14),
+
+                    // LISTA DE GASTOS
                     for (final expense in expenses)
                       _ExpenseCard(
                         expense: expense,
@@ -115,6 +134,10 @@ class ExpensesPage extends ConsumerWidget {
   }
 }
 
+// ----------------------------------------------------
+// SIN GASTOS
+// ----------------------------------------------------
+
 class _EmptyExpenses extends StatelessWidget {
   final VoidCallback onAdd;
 
@@ -123,7 +146,7 @@ class _EmptyExpenses extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Center(
-      child: Padding(
+      child: SingleChildScrollView(
         padding: const EdgeInsets.all(30),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -141,19 +164,29 @@ class _EmptyExpenses extends StatelessWidget {
                 color: AppColors.primary,
               ),
             ),
+
             const SizedBox(height: 20),
+
             const Text(
               'Todavía no tienes gastos',
               textAlign: TextAlign.center,
-              style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+              style: TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+                color: AppColors.textPrimary,
+              ),
             ),
+
             const SizedBox(height: 8),
+
             const Text(
               'Agrega tu primer gasto para comenzar a controlar tu presupuesto.',
               textAlign: TextAlign.center,
               style: TextStyle(color: AppColors.textSecondary),
             ),
+
             const SizedBox(height: 24),
+
             FilledButton.icon(
               onPressed: onAdd,
               icon: const Icon(Icons.add),
@@ -166,6 +199,10 @@ class _EmptyExpenses extends StatelessWidget {
   }
 }
 
+// ----------------------------------------------------
+// TARJETA DE CADA GASTO
+// ----------------------------------------------------
+
 class _ExpenseCard extends StatelessWidget {
   final Expense expense;
   final VoidCallback onTap;
@@ -176,6 +213,8 @@ class _ExpenseCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final formattedDate = DateFormat('dd/MM/yyyy').format(expense.date);
 
+    final categoryColor = expenseCategoryColor(expense.category);
+
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
       decoration: BoxDecoration(
@@ -185,28 +224,53 @@ class _ExpenseCard extends StatelessWidget {
       ),
       child: ListTile(
         onTap: onTap,
+        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 5),
+
+        // ICONO SEGÚN CATEGORÍA
         leading: Container(
-          width: 44,
-          height: 44,
+          width: 46,
+          height: 46,
           decoration: BoxDecoration(
-            color: const Color(0xFFE9F6EF),
+            color: categoryColor.withValues(alpha: 0.12),
             borderRadius: BorderRadius.circular(12),
           ),
-          child: const Icon(Icons.payments_outlined, color: AppColors.primary),
+          child: Icon(
+            expenseCategoryIcon(expense.category),
+            color: categoryColor,
+          ),
         ),
+
+        // NOMBRE
         title: Text(
           expense.name,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
           style: const TextStyle(fontWeight: FontWeight.bold),
         ),
-        subtitle: Text(formattedDate),
+
+        // CATEGORÍA + FECHA
+        subtitle: Padding(
+          padding: const EdgeInsets.only(top: 3),
+          child: Text(
+            '${expense.category.label} • $formattedDate',
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(
+              color: AppColors.textSecondary,
+              fontSize: 12,
+            ),
+          ),
+        ),
+
+        // MONTO
         trailing: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
             Text(
               '\$${expense.amount.toStringAsFixed(2)}',
-              style: const TextStyle(fontWeight: FontWeight.bold),
+              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
             ),
-            const SizedBox(width: 4),
+            const SizedBox(width: 3),
             const Icon(Icons.chevron_right, color: AppColors.textSecondary),
           ],
         ),

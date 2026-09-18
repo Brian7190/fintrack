@@ -264,33 +264,6 @@ class _BudgetPageState extends ConsumerState<BudgetPage> {
               ),
 
               const SizedBox(height: 24),
-
-              // EXPLICACIÓN DEL HISTORIAL
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: AppColors.surfaceAlt,
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: AppColors.border),
-                ),
-                child: const Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Icon(Icons.history_outlined, color: AppColors.primaryDark),
-                    SizedBox(width: 12),
-                    Expanded(
-                      child: Text(
-                        'FinTrack está preparado para conservar un presupuesto independiente por cada mes. El historial podrá almacenarse permanentemente cuando integremos Firebase.',
-                        style: TextStyle(
-                          color: AppColors.textSecondary,
-                          fontSize: 13,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
             ],
           ),
         ),

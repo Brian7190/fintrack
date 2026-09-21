@@ -1,38 +1,96 @@
+import 'dart:async';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../data/repositories/memory_expense_repository.dart';
+import '../../auth/presentation/auth_provider.dart';
+import '../data/repositories/firestore_expense_repository.dart';
 import '../domain/expense.dart';
 import '../domain/expense_category.dart';
 import '../domain/repositories/expense_repository.dart';
 
 // ====================================================
-// REPOSITORIO
+// REPOSITORIO POR USUARIO
 // ====================================================
 
-final expenseRepositoryProvider = Provider<ExpenseRepository>((ref) {
-  return MemoryExpenseRepository();
+final expenseRepositoryProvider = Provider.family<ExpenseRepository, String>((
+  ref,
+  userId,
+) {
+  return FirestoreExpenseRepository(userId: userId);
 });
 
 // ====================================================
-// CRUD DE GASTOS
+// GASTOS
 // ====================================================
 
 class ExpensesNotifier extends Notifier<List<Expense>> {
-  ExpenseRepository get _repository {
-    return ref.read(expenseRepositoryProvider);
-  }
+  StreamSubscription<List<Expense>>? _subscription;
+
+  String? _currentUserId;
 
   @override
   List<Expense> build() {
-    return _repository.getExpenses();
+    final authState = ref.watch(authStateProvider);
+
+    final user = authState.asData?.value;
+
+    final userId = user?.uid;
+
+    // Cancelamos cualquier escucha perteneciente
+    // al usuario anterior.
+    if (_currentUserId != userId) {
+      _subscription?.cancel();
+      _subscription = null;
+
+      _currentUserId = userId;
+    }
+
+    if (userId == null) {
+      return const <Expense>[];
+    }
+
+    final repository = ref.read(expenseRepositoryProvider(userId));
+
+    _subscription ??= repository.watchExpenses().listen(
+      (expenses) {
+        state = expenses;
+      },
+      onError: (_) {
+        state = const <Expense>[];
+      },
+    );
+
+    ref.onDispose(() {
+      _subscription?.cancel();
+    });
+
+    return stateOrEmpty();
   }
 
-  void addExpense({
+  List<Expense> stateOrEmpty() {
+    try {
+      return state;
+    } catch (_) {
+      return const <Expense>[];
+    }
+  }
+
+  ExpenseRepository _repository() {
+    final user = ref.read(authStateProvider).asData?.value;
+
+    if (user == null) {
+      throw StateError('No existe un usuario autenticado.');
+    }
+
+    return ref.read(expenseRepositoryProvider(user.uid));
+  }
+
+  Future<void> addExpense({
     required String name,
     required double amount,
     required ExpenseCategory category,
     required DateTime date,
-  }) {
+  }) async {
     final expense = Expense(
       id: DateTime.now().microsecondsSinceEpoch.toString(),
       name: name,
@@ -41,18 +99,16 @@ class ExpensesNotifier extends Notifier<List<Expense>> {
       category: category,
     );
 
-    _repository.addExpense(expense);
-
-    state = _repository.getExpenses();
+    await _repository().addExpense(expense);
   }
 
-  void updateExpense({
+  Future<void> updateExpense({
     required String id,
     required String name,
     required double amount,
     required ExpenseCategory category,
     required DateTime date,
-  }) {
+  }) async {
     final currentExpense = state.firstWhere((expense) => expense.id == id);
 
     final updatedExpense = currentExpense.copyWith(
@@ -62,15 +118,11 @@ class ExpensesNotifier extends Notifier<List<Expense>> {
       date: date,
     );
 
-    _repository.updateExpense(updatedExpense);
-
-    state = _repository.getExpenses();
+    await _repository().updateExpense(updatedExpense);
   }
 
-  void deleteExpense(String id) {
-    _repository.deleteExpense(id);
-
-    state = _repository.getExpenses();
+  Future<void> deleteExpense(String id) async {
+    await _repository().deleteExpense(id);
   }
 }
 
@@ -79,7 +131,7 @@ final expensesProvider = NotifierProvider<ExpensesNotifier, List<Expense>>(
 );
 
 // ====================================================
-// FILTROS Y ORDENAMIENTO
+// FILTROS
 // ====================================================
 
 enum ExpenseSortOrder { newest, highestAmount, lowestAmount }
@@ -165,7 +217,6 @@ class ExpenseFilterNotifier extends Notifier<ExpenseFilterState> {
 
     final currentMonth = DateTime(now.year, now.month);
 
-    // No permitimos seleccionar meses futuros.
     if (next.isAfter(currentMonth)) {
       return;
     }
@@ -186,7 +237,7 @@ final expenseFilterProvider =
     );
 
 // ====================================================
-// GASTOS DEL MES SELECCIONADO
+// MES SELECCIONADO
 // ====================================================
 
 final selectedMonthExpensesProvider = Provider<List<Expense>>((ref) {
@@ -224,7 +275,7 @@ final selectedMonthExpensesByCategoryProvider =
     });
 
 // ====================================================
-// RESULTADOS VISIBLES CON BUSCADOR + FILTRO + ORDEN
+// BÚSQUEDA + FILTROS
 // ====================================================
 
 final filteredExpensesProvider = Provider<List<Expense>>((ref) {
@@ -266,8 +317,7 @@ final filteredExpensesProvider = Provider<List<Expense>>((ref) {
 });
 
 // ====================================================
-// PROVIDERS DEL MES ACTUAL
-// Siguen siendo usados por Home y Estadísticas.
+// MES ACTUAL
 // ====================================================
 
 final currentMonthExpensesProvider = Provider<List<Expense>>((ref) {
@@ -303,7 +353,10 @@ final currentMonthExpensesByCategoryProvider =
       return totals;
     });
 
-// Se mantiene por compatibilidad.
+// ====================================================
+// COMPATIBILIDAD
+// ====================================================
+
 final totalExpensesProvider = Provider<double>((ref) {
   final expenses = ref.watch(expensesProvider);
 

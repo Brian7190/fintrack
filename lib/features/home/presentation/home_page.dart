@@ -6,6 +6,8 @@ import 'package:intl/intl.dart';
 import '../../../app/router.dart';
 import '../../../app/theme.dart';
 
+import '../../auth/presentation/auth_provider.dart';
+
 import '../../budget/domain/monthly_budget.dart';
 import '../../budget/presentation/budget_provider.dart';
 
@@ -22,6 +24,43 @@ final NumberFormat _moneyFormat = NumberFormat.currency(
   symbol: '\$',
   decimalDigits: 2,
 );
+
+// ====================================================
+// CERRAR SESIÓN
+// ====================================================
+
+Future<void> _signOut(BuildContext context, WidgetRef ref) async {
+  try {
+    // 1. Cerrar sesión real de Firebase.
+    await ref.read(authRepositoryProvider).signOut();
+
+    // 2. Limpiar gastos almacenados temporalmente en memoria.
+    ref.invalidate(expensesProvider);
+    ref.invalidate(expenseFilterProvider);
+
+    // 3. Limpiar pagos almacenados temporalmente en memoria.
+    ref.invalidate(paymentRepositoryProvider);
+    ref.invalidate(paymentsProvider);
+
+    // 4. Limpiar presupuesto almacenado temporalmente.
+    ref.invalidate(budgetProvider);
+
+    if (!context.mounted) {
+      return;
+    }
+
+    // 5. Regresar al Login.
+    context.go(AppRoutes.login);
+  } catch (_) {
+    if (!context.mounted) {
+      return;
+    }
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('No fue posible cerrar la sesión.')),
+    );
+  }
+}
 
 class HomePage extends ConsumerWidget {
   const HomePage({super.key});
@@ -45,23 +84,18 @@ class HomePage extends ConsumerWidget {
       );
     }
 
-    final double available = budget - spent;
+    final available = budget - spent;
 
-    final double progress = budget <= 0 ? 0 : (spent / budget).clamp(0.0, 1.0);
-
-    final double percentageUsed = budget <= 0 ? 0 : (spent / budget) * 100;
+    final signal = BudgetSignal.from(budget: budget, spent: spent);
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text(
-          'FinTrack',
-          style: TextStyle(fontWeight: FontWeight.bold),
-        ),
+        title: const Text('FinTrack'),
         actions: [
           IconButton(
             tooltip: 'Cerrar sesión',
-            onPressed: () {
-              context.go(AppRoutes.login);
+            onPressed: () async {
+              await _signOut(context, ref);
             },
             icon: const Icon(Icons.logout),
           ),
@@ -73,169 +107,43 @@ class HomePage extends ConsumerWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // =========================================
-              // ENCABEZADO PRINCIPAL
-              // =========================================
+              // ==================================================
+              // ENCABEZADO
+              // ==================================================
               const _FinancialHeader(),
 
               const SizedBox(height: 20),
 
-              // =========================================
-              // ALERTAS DEL PRESUPUESTO
-              // =========================================
-              if (spent > budget) ...[
-                const _BudgetAlert(
-                  icon: Icons.warning_amber_rounded,
-                  title: 'Presupuesto excedido',
-                  message: 'Has gastado más de lo planeado para este mes.',
-                  backgroundColor: AppColors.errorSoft,
-                  iconColor: AppColors.error,
-                ),
-                const SizedBox(height: 18),
-              ] else if (percentageUsed >= 80) ...[
-                const _BudgetAlert(
-                  icon: Icons.notifications_active_outlined,
-                  title: 'Cerca del límite',
-                  message:
-                      'Has utilizado más del 80% de tu presupuesto mensual.',
-                  backgroundColor: AppColors.warningSoft,
-                  iconColor: AppColors.warning,
-                ),
+              // ==================================================
+              // ALERTA DEL SEMÁFORO
+              // ==================================================
+              if (signal.status != BudgetSignalStatus.healthy) ...[
+                _BudgetAlert(signal: signal),
                 const SizedBox(height: 18),
               ],
 
-              // =========================================
-              // DINERO DISPONIBLE
-              // =========================================
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(24),
-                decoration: BoxDecoration(
-                  color: AppColors.primary,
-                  borderRadius: BorderRadius.circular(22),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      available >= 0 ? 'Disponible' : 'Presupuesto excedido',
-                      style: const TextStyle(
-                        color: Colors.white70,
-                        fontSize: 15,
-                      ),
-                    ),
-
-                    const SizedBox(height: 8),
-
-                    FittedBox(
-                      fit: BoxFit.scaleDown,
-                      alignment: Alignment.centerLeft,
-                      child: Text(
-                        _moneyFormat.format(available.abs()),
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 34,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ),
-
-                    const SizedBox(height: 6),
-
-                    Text(
-                      'Presupuesto: ${_moneyFormat.format(budget)}',
-                      style: const TextStyle(
-                        color: Colors.white70,
-                        fontSize: 14,
-                      ),
-                    ),
-                  ],
-                ),
+              // ==================================================
+              // TARJETA PRINCIPAL
+              // ==================================================
+              _BudgetStatusCard(
+                budget: budget,
+                spent: spent,
+                available: available,
+                signal: signal,
               ),
 
               const SizedBox(height: 20),
 
-              // =========================================
-              // PROGRESO DEL PRESUPUESTO
-              // =========================================
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(18),
-                decoration: BoxDecoration(
-                  color: AppColors.surface,
-                  borderRadius: BorderRadius.circular(18),
-                  border: Border.all(color: AppColors.border),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        const Text(
-                          'Presupuesto mensual',
-                          style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold,
-                            color: AppColors.textPrimary,
-                          ),
-                        ),
-                        Text(
-                          MonthlyBudget.currentPeriodLabel(),
-                          style: const TextStyle(
-                            fontSize: 12,
-                            color: AppColors.textSecondary,
-                          ),
-                        ),
-                      ],
-                    ),
-
-                    const SizedBox(height: 16),
-
-                    LinearProgressIndicator(
-                      value: progress,
-                      minHeight: 9,
-                      borderRadius: BorderRadius.circular(10),
-                      backgroundColor: AppColors.border,
-                      color: spent > budget
-                          ? AppColors.error
-                          : percentageUsed >= 80
-                          ? AppColors.warning
-                          : AppColors.primary,
-                    ),
-
-                    const SizedBox(height: 14),
-
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Flexible(
-                          child: Text(
-                            'Gastado: ${_moneyFormat.format(spent)}',
-                            style: const TextStyle(
-                              color: AppColors.textSecondary,
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 10),
-                        Text(
-                          '${percentageUsed.toStringAsFixed(1)}%',
-                          style: const TextStyle(
-                            fontWeight: FontWeight.bold,
-                            color: AppColors.textPrimary,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
+              // ==================================================
+              // PROGRESO
+              // ==================================================
+              _BudgetProgressCard(spent: spent, signal: signal),
 
               const SizedBox(height: 26),
 
-              // =========================================
+              // ==================================================
               // RESUMEN
-              // =========================================
+              // ==================================================
               const Text(
                 'Resumen',
                 style: TextStyle(
@@ -254,6 +162,7 @@ class HomePage extends ConsumerWidget {
                       icon: Icons.payments_outlined,
                       title: 'Gastado',
                       value: _moneyFormat.format(spent),
+                      accentColor: signal.primaryColor,
                     ),
                   ),
                   const SizedBox(width: 12),
@@ -262,6 +171,7 @@ class HomePage extends ConsumerWidget {
                       icon: Icons.account_balance_wallet_outlined,
                       title: 'Presupuesto',
                       value: _moneyFormat.format(budget),
+                      accentColor: AppColors.primaryDark,
                     ),
                   ),
                 ],
@@ -269,9 +179,9 @@ class HomePage extends ConsumerWidget {
 
               const SizedBox(height: 26),
 
-              // =========================================
+              // ==================================================
               // PRÓXIMO PAGO
-              // =========================================
+              // ==================================================
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
@@ -301,9 +211,9 @@ class HomePage extends ConsumerWidget {
 
               const SizedBox(height: 26),
 
-              // =========================================
+              // ==================================================
               // GASTOS RECIENTES
-              // =========================================
+              // ==================================================
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
@@ -368,7 +278,7 @@ class HomePage extends ConsumerWidget {
 }
 
 // ====================================================
-// ENCABEZADO FINANCIERO
+// ENCABEZADO
 // ====================================================
 
 class _FinancialHeader extends StatelessWidget {
@@ -413,9 +323,7 @@ class _FinancialHeader extends StatelessWidget {
               ),
             ],
           ),
-
           const SizedBox(height: 14),
-
           const Text(
             'Resumen financiero',
             style: TextStyle(
@@ -424,9 +332,7 @@ class _FinancialHeader extends StatelessWidget {
               color: AppColors.textPrimary,
             ),
           ),
-
           const SizedBox(height: 6),
-
           const Text(
             'Consulta el estado de tu presupuesto y tus gastos del mes.',
             style: TextStyle(
@@ -442,10 +348,317 @@ class _FinancialHeader extends StatelessWidget {
 }
 
 // ====================================================
+// TARJETA PRINCIPAL
+// ====================================================
+
+class _BudgetStatusCard extends StatelessWidget {
+  final double budget;
+  final double spent;
+  final double available;
+  final BudgetSignal signal;
+
+  const _BudgetStatusCard({
+    required this.budget,
+    required this.spent,
+    required this.available,
+    required this.signal,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(22),
+      decoration: BoxDecoration(
+        color: signal.softColor,
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(color: signal.primaryColor.withValues(alpha: 0.25)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+            decoration: BoxDecoration(
+              color: signal.primaryColor.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(30),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 8,
+                  height: 8,
+                  decoration: BoxDecoration(
+                    color: signal.primaryColor,
+                    shape: BoxShape.circle,
+                  ),
+                ),
+                const SizedBox(width: 7),
+                Text(
+                  signal.label,
+                  style: TextStyle(
+                    color: signal.primaryColor,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+          const SizedBox(height: 18),
+
+          Text(
+            available >= 0 ? 'Disponible' : 'Presupuesto excedido',
+            style: const TextStyle(
+              color: AppColors.textSecondary,
+              fontSize: 15,
+            ),
+          ),
+
+          const SizedBox(height: 7),
+
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.centerLeft,
+            child: Text(
+              _moneyFormat.format(available.abs()),
+              style: TextStyle(
+                color: signal.primaryColor,
+                fontSize: 34,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ),
+
+          const SizedBox(height: 6),
+
+          Text(
+            'Presupuesto: ${_moneyFormat.format(budget)}',
+            style: const TextStyle(
+              color: AppColors.textSecondary,
+              fontSize: 14,
+            ),
+          ),
+
+          const SizedBox(height: 14),
+
+          Text(
+            signal.message,
+            style: const TextStyle(
+              color: AppColors.textSecondary,
+              fontSize: 13,
+              height: 1.4,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ====================================================
+// PROGRESO
+// ====================================================
+
+class _BudgetProgressCard extends StatelessWidget {
+  final double spent;
+  final BudgetSignal signal;
+
+  const _BudgetProgressCard({required this.spent, required this.signal});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text(
+                'Presupuesto mensual',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                  color: AppColors.textPrimary,
+                ),
+              ),
+              Text(
+                MonthlyBudget.currentPeriodLabel(),
+                style: const TextStyle(
+                  fontSize: 12,
+                  color: AppColors.textSecondary,
+                ),
+              ),
+            ],
+          ),
+
+          const SizedBox(height: 16),
+
+          LinearProgressIndicator(
+            value: signal.progress,
+            minHeight: 9,
+            borderRadius: BorderRadius.circular(10),
+            backgroundColor: AppColors.border,
+            color: signal.primaryColor,
+          ),
+
+          const SizedBox(height: 14),
+
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Flexible(
+                child: Text(
+                  'Gastado: ${_moneyFormat.format(spent)}',
+                  style: const TextStyle(color: AppColors.textSecondary),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Text(
+                '${signal.percentageUsed.toStringAsFixed(1)}%',
+                style: TextStyle(
+                  fontWeight: FontWeight.bold,
+                  color: signal.primaryColor,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ====================================================
+// ALERTA
+// ====================================================
+
+class _BudgetAlert extends StatelessWidget {
+  final BudgetSignal signal;
+
+  const _BudgetAlert({required this.signal});
+
+  @override
+  Widget build(BuildContext context) {
+    final IconData icon = switch (signal.status) {
+      BudgetSignalStatus.healthy => Icons.check_circle_outline,
+      BudgetSignalStatus.warning => Icons.notifications_active_outlined,
+      BudgetSignalStatus.danger => Icons.warning_amber_rounded,
+      BudgetSignalStatus.exceeded => Icons.error_outline,
+    };
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: signal.softColor,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: signal.primaryColor.withValues(alpha: 0.25)),
+      ),
+      child: Row(
+        children: [
+          Icon(icon, color: signal.primaryColor, size: 30),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  signal.label,
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    color: signal.primaryColor,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  signal.message,
+                  style: const TextStyle(
+                    fontSize: 13,
+                    color: AppColors.textSecondary,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ====================================================
+// RESUMEN
+// ====================================================
+
+class _SummaryCard extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final String value;
+  final Color accentColor;
+
+  const _SummaryCard({
+    required this.icon,
+    required this.title,
+    required this.value,
+    required this.accentColor,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, color: accentColor),
+          const SizedBox(height: 12),
+          Text(
+            title,
+            style: const TextStyle(
+              color: AppColors.textSecondary,
+              fontSize: 13,
+            ),
+          ),
+          const SizedBox(height: 4),
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.centerLeft,
+            child: Text(
+              value,
+              style: const TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+                color: AppColors.textPrimary,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ====================================================
 // HOME SIN PRESUPUESTO
 // ====================================================
 
-class _HomeWithoutBudget extends StatelessWidget {
+class _HomeWithoutBudget extends ConsumerWidget {
   final List<Expense> expenses;
   final Payment? nearestPayment;
 
@@ -455,15 +668,15 @@ class _HomeWithoutBudget extends StatelessWidget {
   });
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     return Scaffold(
       appBar: AppBar(
         title: const Text('FinTrack'),
         actions: [
           IconButton(
             tooltip: 'Cerrar sesión',
-            onPressed: () {
-              context.go(AppRoutes.login);
+            onPressed: () async {
+              await _signOut(context, ref);
             },
             icon: const Icon(Icons.logout),
           ),
@@ -502,9 +715,7 @@ class _HomeWithoutBudget extends StatelessWidget {
                         color: AppColors.primaryDark,
                       ),
                     ),
-
                     const SizedBox(height: 18),
-
                     const Text(
                       'Configura tu presupuesto mensual',
                       textAlign: TextAlign.center,
@@ -514,17 +725,13 @@ class _HomeWithoutBudget extends StatelessWidget {
                         color: AppColors.textPrimary,
                       ),
                     ),
-
                     const SizedBox(height: 8),
-
                     const Text(
                       'Define cuánto dinero deseas administrar durante este mes.',
                       textAlign: TextAlign.center,
                       style: TextStyle(color: AppColors.textSecondary),
                     ),
-
                     const SizedBox(height: 22),
-
                     SizedBox(
                       width: double.infinity,
                       child: FilledButton.icon(
@@ -578,122 +785,6 @@ class _HomeWithoutBudget extends StatelessWidget {
             ],
           ),
         ),
-      ),
-    );
-  }
-}
-
-// ====================================================
-// ALERTA
-// ====================================================
-
-class _BudgetAlert extends StatelessWidget {
-  final IconData icon;
-  final String title;
-  final String message;
-  final Color backgroundColor;
-  final Color iconColor;
-
-  const _BudgetAlert({
-    required this.icon,
-    required this.title,
-    required this.message,
-    required this.backgroundColor,
-    required this.iconColor,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: backgroundColor,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: iconColor.withValues(alpha: 0.20)),
-      ),
-      child: Row(
-        children: [
-          Icon(icon, color: iconColor, size: 30),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  style: const TextStyle(
-                    fontWeight: FontWeight.bold,
-                    color: AppColors.textPrimary,
-                  ),
-                ),
-                const SizedBox(height: 3),
-                Text(
-                  message,
-                  style: const TextStyle(
-                    fontSize: 13,
-                    color: AppColors.textSecondary,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-// ====================================================
-// TARJETA DE RESUMEN
-// ====================================================
-
-class _SummaryCard extends StatelessWidget {
-  final IconData icon;
-  final String title;
-  final String value;
-
-  const _SummaryCard({
-    required this.icon,
-    required this.title,
-    required this.value,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: AppColors.border),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Icon(icon, color: AppColors.primaryDark),
-          const SizedBox(height: 12),
-          Text(
-            title,
-            style: const TextStyle(
-              color: AppColors.textSecondary,
-              fontSize: 13,
-            ),
-          ),
-          const SizedBox(height: 4),
-          FittedBox(
-            fit: BoxFit.scaleDown,
-            alignment: Alignment.centerLeft,
-            child: Text(
-              value,
-              style: const TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-                color: AppColors.textPrimary,
-              ),
-            ),
-          ),
-        ],
       ),
     );
   }

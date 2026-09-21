@@ -1,11 +1,11 @@
 import '../expense.dart';
 
 abstract class ExpenseRepository {
-  List<Expense> getExpenses();
+  Stream<List<Expense>> watchExpenses();
 
-  void addExpense(Expense expense);
+  Future<void> addExpense(Expense expense);
 
-  void updateExpense(Expense expense);
+  Future<void> updateExpense(Expense expense);
 
-  void deleteExpense(String id);
+  Future<void> deleteExpense(String id);
 }

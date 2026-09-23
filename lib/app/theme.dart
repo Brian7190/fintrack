@@ -34,142 +34,14 @@ class AppColors {
   static const Color border = Color(0xFFD2DBD8);
 
   // ==================================================
-  // SEMÁFORO FINANCIERO
+  // ESTADOS
   // ==================================================
 
-  // Estado saludable
-  static const Color success = Color(0xFF2F7D73);
-  static const Color successSoft = Color(0xFFDCEBE8);
-
-  // Precaución
   static const Color warning = Color(0xFFB88723);
   static const Color warningSoft = Color(0xFFF6EDD8);
 
-  // Riesgo alto
-  static const Color danger = Color(0xFFB85A3F);
-  static const Color dangerSoft = Color(0xFFF4E3DE);
-
-  // Presupuesto excedido
   static const Color error = Color(0xFF9F2D26);
   static const Color errorSoft = Color(0xFFF4DDDB);
-}
-
-// ====================================================
-// ESTADO DEL SEMÁFORO
-// ====================================================
-
-enum BudgetSignalStatus { healthy, warning, danger, exceeded }
-
-// ====================================================
-// LÓGICA DEL SEMÁFORO
-// ====================================================
-
-class BudgetSignal {
-  final BudgetSignalStatus status;
-  final double progress;
-  final double percentageUsed;
-
-  final Color primaryColor;
-  final Color softColor;
-
-  final String label;
-  final String message;
-
-  const BudgetSignal({
-    required this.status,
-    required this.progress,
-    required this.percentageUsed,
-    required this.primaryColor,
-    required this.softColor,
-    required this.label,
-    required this.message,
-  });
-
-  static BudgetSignal from({required double budget, required double spent}) {
-    // ==================================================
-    // SIN PRESUPUESTO
-    // ==================================================
-
-    if (budget <= 0) {
-      return const BudgetSignal(
-        status: BudgetSignalStatus.warning,
-        progress: 0,
-        percentageUsed: 0,
-        primaryColor: AppColors.warning,
-        softColor: AppColors.warningSoft,
-        label: 'Sin presupuesto',
-        message:
-            'Configura un presupuesto mensual para comenzar a controlar tus gastos.',
-      );
-    }
-
-    final percentageUsed = (spent / budget) * 100;
-
-    final progress = (spent / budget).clamp(0.0, 1.0).toDouble();
-
-    // ==================================================
-    // MÁS DEL 100%
-    // ==================================================
-
-    if (spent > budget) {
-      return BudgetSignal(
-        status: BudgetSignalStatus.exceeded,
-        progress: 1,
-        percentageUsed: percentageUsed,
-        primaryColor: AppColors.error,
-        softColor: AppColors.errorSoft,
-        label: 'Presupuesto excedido',
-        message: 'Has superado el presupuesto establecido para este mes.',
-      );
-    }
-
-    // ==================================================
-    // 90% - 100%
-    // ==================================================
-
-    if (percentageUsed >= 90) {
-      return BudgetSignal(
-        status: BudgetSignalStatus.danger,
-        progress: progress,
-        percentageUsed: percentageUsed,
-        primaryColor: AppColors.danger,
-        softColor: AppColors.dangerSoft,
-        label: 'Riesgo alto',
-        message: 'Estás muy cerca de alcanzar el límite de tu presupuesto.',
-      );
-    }
-
-    // ==================================================
-    // 60% - 89%
-    // ==================================================
-
-    if (percentageUsed >= 60) {
-      return BudgetSignal(
-        status: BudgetSignalStatus.warning,
-        progress: progress,
-        percentageUsed: percentageUsed,
-        primaryColor: AppColors.warning,
-        softColor: AppColors.warningSoft,
-        label: 'Cuidado',
-        message:
-            'Ya utilizaste una parte importante de tu presupuesto mensual.',
-      );
-    }
-
-    // ==================================================
-    // 0% - 59%
-    // ==================================================
-
-    return BudgetSignal(
-      status: BudgetSignalStatus.healthy,
-      progress: progress,
-      percentageUsed: percentageUsed,
-      primaryColor: AppColors.success,
-      softColor: AppColors.successSoft,
-      label: 'Saludable',
-      message: 'Tu presupuesto se encuentra dentro de un nivel saludable.',
-    );
-  }
 }
 
 // ====================================================
@@ -191,11 +63,8 @@ class AppTheme {
 
     return ThemeData(
       useMaterial3: true,
-
       colorScheme: colorScheme,
-
       scaffoldBackgroundColor: AppColors.background,
-
       fontFamily: 'Roboto',
 
       // ==================================================
@@ -260,27 +129,22 @@ class AppTheme {
         helperStyle: const TextStyle(color: AppColors.textSecondary),
         prefixIconColor: AppColors.primaryDark,
         suffixIconColor: AppColors.textSecondary,
-
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
           borderSide: const BorderSide(color: AppColors.border),
         ),
-
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
           borderSide: const BorderSide(color: AppColors.border),
         ),
-
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
           borderSide: const BorderSide(color: AppColors.primary, width: 1.5),
         ),
-
         errorBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
           borderSide: const BorderSide(color: AppColors.error),
         ),
-
         focusedErrorBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
           borderSide: const BorderSide(color: AppColors.error, width: 1.5),
@@ -288,7 +152,7 @@ class AppTheme {
       ),
 
       // ==================================================
-      // BOTONES PRINCIPALES
+      // BOTONES
       // ==================================================
       filledButtonTheme: FilledButtonThemeData(
         style: FilledButton.styleFrom(
@@ -304,9 +168,6 @@ class AppTheme {
         ),
       ),
 
-      // ==================================================
-      // BOTONES CON BORDE
-      // ==================================================
       outlinedButtonTheme: OutlinedButtonThemeData(
         style: OutlinedButton.styleFrom(
           foregroundColor: AppColors.primaryDark,
@@ -318,9 +179,6 @@ class AppTheme {
         ),
       ),
 
-      // ==================================================
-      // BOTONES DE TEXTO
-      // ==================================================
       textButtonTheme: TextButtonThemeData(
         style: TextButton.styleFrom(
           foregroundColor: AppColors.primaryDark,
@@ -329,7 +187,7 @@ class AppTheme {
       ),
 
       // ==================================================
-      // FLOATING ACTION BUTTON
+      // BOTÓN FLOTANTE
       // ==================================================
       floatingActionButtonTheme: const FloatingActionButtonThemeData(
         backgroundColor: AppColors.primary,
@@ -338,7 +196,7 @@ class AppTheme {
       ),
 
       // ==================================================
-      // NAVEGACIÓN INFERIOR
+      // NAVEGACIÓN
       // ==================================================
       navigationBarTheme: NavigationBarThemeData(
         backgroundColor: AppColors.surface,
@@ -346,7 +204,6 @@ class AppTheme {
         elevation: 0,
         height: 70,
         indicatorColor: AppColors.primarySoft,
-
         labelTextStyle: WidgetStateProperty.resolveWith((states) {
           if (states.contains(WidgetState.selected)) {
             return const TextStyle(
@@ -358,7 +215,6 @@ class AppTheme {
 
           return const TextStyle(color: AppColors.textSecondary, fontSize: 12);
         }),
-
         iconTheme: WidgetStateProperty.resolveWith((states) {
           if (states.contains(WidgetState.selected)) {
             return const IconThemeData(color: AppColors.primaryDark);
@@ -392,7 +248,7 @@ class AppTheme {
       ),
 
       // ==================================================
-      // BOTTOM SHEETS
+      // BOTTOM SHEET
       // ==================================================
       bottomSheetTheme: const BottomSheetThemeData(
         backgroundColor: AppColors.surface,
@@ -412,29 +268,20 @@ class AppTheme {
       ),
 
       // ==================================================
-      // PROGRESO
+      // INDICADORES
       // ==================================================
       progressIndicatorTheme: const ProgressIndicatorThemeData(
         color: AppColors.primary,
         linearTrackColor: AppColors.border,
       ),
 
-      // ==================================================
-      // ICONOS
-      // ==================================================
       iconTheme: const IconThemeData(color: AppColors.textPrimary),
 
-      // ==================================================
-      // LIST TILE
-      // ==================================================
       listTileTheme: const ListTileThemeData(
         textColor: AppColors.textPrimary,
         iconColor: AppColors.primaryDark,
       ),
 
-      // ==================================================
-      // DIVISORES
-      // ==================================================
       dividerColor: AppColors.border,
 
       // ==================================================
@@ -443,21 +290,15 @@ class AppTheme {
       datePickerTheme: DatePickerThemeData(
         backgroundColor: AppColors.surface,
         surfaceTintColor: Colors.transparent,
-
         headerBackgroundColor: AppColors.primary,
-
         headerForegroundColor: Colors.white,
-
         todayForegroundColor: const WidgetStatePropertyAll(
           AppColors.primaryDark,
         ),
-
         todayBorder: const BorderSide(color: AppColors.primary),
-
         dayOverlayColor: WidgetStatePropertyAll(
           AppColors.primarySoft.withValues(alpha: 0.45),
         ),
-
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
       ),
 

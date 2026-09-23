@@ -24,13 +24,23 @@ class BudgetPage extends ConsumerStatefulWidget {
 class _BudgetPageState extends ConsumerState<BudgetPage> {
   final TextEditingController _budgetController = TextEditingController();
 
+  bool _isSaving = false;
+
   @override
   void dispose() {
     _budgetController.dispose();
     super.dispose();
   }
 
+  // ====================================================
+  // GUARDAR PRESUPUESTO
+  // ====================================================
+
   Future<void> _saveBudget() async {
+    if (_isSaving) {
+      return;
+    }
+
     final text = _budgetController.text.trim().replaceAll(',', '.');
 
     if (text.isEmpty) {
@@ -47,8 +57,10 @@ class _BudgetPageState extends ConsumerState<BudgetPage> {
 
     final spent = ref.read(currentMonthExpensesTotalProvider);
 
-    // ADVERTENCIA CUANDO EL PRESUPUESTO ES MENOR
-    // A LO QUE YA SE HA GASTADO.
+    // ==================================================
+    // ADVERTENCIA
+    // ==================================================
+
     if (amount < spent) {
       final difference = spent - amount;
 
@@ -56,10 +68,18 @@ class _BudgetPageState extends ConsumerState<BudgetPage> {
         context: context,
         builder: (dialogContext) {
           return AlertDialog(
-            icon: const Icon(
-              Icons.warning_amber_rounded,
-              color: AppColors.warning,
-              size: 38,
+            icon: Container(
+              width: 58,
+              height: 58,
+              decoration: const BoxDecoration(
+                color: AppColors.warningSoft,
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(
+                Icons.warning_amber_rounded,
+                color: AppColors.warning,
+                size: 30,
+              ),
             ),
             title: const Text('Presupuesto menor a tus gastos'),
             content: Text(
@@ -68,8 +88,8 @@ class _BudgetPageState extends ConsumerState<BudgetPage> {
               'este mes.\n\n'
               'Si estableces un presupuesto de '
               '${_moneyFormat.format(amount)}, '
-              'lo excederás por '
-              '${_moneyFormat.format(difference)}.\n\n'
+              'tu saldo será '
+              '${_moneyFormat.format(-difference)}.\n\n'
               '¿Deseas continuar?',
             ),
             actions: [
@@ -95,17 +115,47 @@ class _BudgetPageState extends ConsumerState<BudgetPage> {
       }
     }
 
-    ref.read(budgetStateProvider.notifier).saveBudget(amount);
+    setState(() {
+      _isSaving = true;
+    });
 
-    _budgetController.clear();
+    try {
+      await ref.read(budgetStateProvider.notifier).saveBudget(amount);
 
-    if (!mounted) {
-      return;
+      _budgetController.clear();
+
+      if (!mounted) {
+        return;
+      }
+
+      FocusScope.of(context).unfocus();
+
+      _showMessage('Presupuesto guardado correctamente');
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+
+      final message = error.toString();
+
+      if (message.contains('permission-denied')) {
+        _showMessage('No tienes permiso para guardar este presupuesto.');
+        return;
+      }
+
+      if (message.contains('No existe un usuario autenticado')) {
+        _showMessage('Tu sesión ya no está activa. Inicia sesión nuevamente.');
+        return;
+      }
+
+      _showMessage('No fue posible guardar el presupuesto.');
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isSaving = false;
+        });
+      }
     }
-
-    FocusScope.of(context).unfocus();
-
-    _showMessage('Presupuesto guardado correctamente');
   }
 
   void _showMessage(String message) {
@@ -144,57 +194,16 @@ class _BudgetPageState extends ConsumerState<BudgetPage> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // MES ACTUAL
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(18),
-                decoration: BoxDecoration(
-                  color: AppColors.surfaceAlt,
-                  borderRadius: BorderRadius.circular(18),
-                  border: Border.all(color: AppColors.border),
-                ),
-                child: Row(
-                  children: [
-                    Container(
-                      width: 48,
-                      height: 48,
-                      decoration: BoxDecoration(
-                        color: AppColors.primarySoft,
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: const Icon(
-                        Icons.calendar_month_outlined,
-                        color: AppColors.primaryDark,
-                      ),
-                    ),
-                    const SizedBox(width: 14),
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text(
-                          'Presupuesto del mes',
-                          style: TextStyle(
-                            color: AppColors.textSecondary,
-                            fontSize: 13,
-                          ),
-                        ),
-                        const SizedBox(height: 3),
-                        Text(
-                          MonthlyBudget.currentPeriodLabel(),
-                          style: const TextStyle(
-                            fontSize: 20,
-                            fontWeight: FontWeight.bold,
-                            color: AppColors.textPrimary,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
+              // ==================================================
+              // PERIODO
+              // ==================================================
+              _PeriodHeader(period: MonthlyBudget.currentPeriodLabel()),
 
               const SizedBox(height: 20),
 
+              // ==================================================
+              // PRESUPUESTO
+              // ==================================================
               if (budget == null)
                 _NoBudgetCard(spent: spent)
               else
@@ -207,63 +216,26 @@ class _BudgetPageState extends ConsumerState<BudgetPage> {
                   isOverBudget: isOverBudget,
                 ),
 
+              // ==================================================
+              // AVISO
+              // ==================================================
+              if (isOverBudget) ...[
+                const SizedBox(height: 16),
+
+                _ExceededBudgetAlert(exceededAmount: spent - budget),
+              ],
+
               const SizedBox(height: 28),
 
-              Text(
-                budget == null
-                    ? 'Ingresa tu presupuesto'
-                    : 'Actualizar presupuesto',
-                style: const TextStyle(
-                  fontSize: 20,
-                  fontWeight: FontWeight.bold,
-                  color: AppColors.textPrimary,
-                ),
-              ),
-
-              const SizedBox(height: 6),
-
-              Text(
-                budget == null
-                    ? 'Define cuánto deseas gastar durante este mes.'
-                    : 'Puedes ajustar tu presupuesto si tus planes cambian.',
-                style: const TextStyle(color: AppColors.textSecondary),
-              ),
-
-              const SizedBox(height: 16),
-
-              TextField(
+              // ==================================================
+              // FORMULARIO
+              // ==================================================
+              _BudgetFormCard(
                 controller: _budgetController,
-                keyboardType: const TextInputType.numberWithOptions(
-                  decimal: true,
-                ),
-                inputFormatters: [
-                  FilteringTextInputFormatter.allow(
-                    RegExp(r'^\d*[.,]?\d{0,2}'),
-                  ),
-                ],
-                decoration: const InputDecoration(
-                  labelText: 'Cantidad',
-                  hintText: 'Ej. 10000.00',
-                  prefixIcon: Icon(Icons.attach_money),
-                ),
+                hasBudget: budget != null,
+                isSaving: _isSaving,
+                onSave: _saveBudget,
               ),
-
-              const SizedBox(height: 18),
-
-              SizedBox(
-                width: double.infinity,
-                child: FilledButton.icon(
-                  onPressed: _saveBudget,
-                  icon: const Icon(Icons.save_outlined),
-                  label: Text(
-                    budget == null
-                        ? 'Crear presupuesto'
-                        : 'Actualizar presupuesto',
-                  ),
-                ),
-              ),
-
-              const SizedBox(height: 24),
             ],
           ),
         ),
@@ -272,9 +244,72 @@ class _BudgetPageState extends ConsumerState<BudgetPage> {
   }
 }
 
-// ==================================================
+// ====================================================
+// PERIODO
+// ====================================================
+
+class _PeriodHeader extends StatelessWidget {
+  final String period;
+
+  const _PeriodHeader({required this.period});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: AppColors.surfaceAlt,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 48,
+            height: 48,
+            decoration: BoxDecoration(
+              color: AppColors.primarySoft,
+              borderRadius: BorderRadius.circular(13),
+            ),
+            child: const Icon(
+              Icons.calendar_month_outlined,
+              color: AppColors.primaryDark,
+            ),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Presupuesto del mes',
+                  style: TextStyle(
+                    color: AppColors.textSecondary,
+                    fontSize: 13,
+                  ),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  period,
+                  style: const TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                    color: AppColors.textPrimary,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ====================================================
 // SIN PRESUPUESTO
-// ==================================================
+// ====================================================
 
 class _NoBudgetCard extends StatelessWidget {
   final double spent;
@@ -285,60 +320,93 @@ class _NoBudgetCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(22),
+      padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
-        color: AppColors.primarySoft,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: AppColors.border),
+        color: AppColors.primaryDark,
+        borderRadius: BorderRadius.circular(22),
+        boxShadow: [
+          BoxShadow(
+            color: AppColors.primaryDark.withValues(alpha: 0.16),
+            blurRadius: 18,
+            offset: const Offset(0, 7),
+          ),
+        ],
       ),
       child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Icon(
-            Icons.account_balance_wallet_outlined,
-            size: 48,
-            color: AppColors.primaryDark,
+          Container(
+            width: 52,
+            height: 52,
+            decoration: BoxDecoration(
+              color: Colors.white.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: const Icon(
+              Icons.account_balance_wallet_outlined,
+              color: Colors.white,
+              size: 26,
+            ),
           ),
 
-          const SizedBox(height: 14),
+          const SizedBox(height: 20),
 
           const Text(
             'Aún no tienes un presupuesto',
-            textAlign: TextAlign.center,
             style: TextStyle(
-              fontSize: 19,
+              fontSize: 21,
               fontWeight: FontWeight.bold,
-              color: AppColors.textPrimary,
+              color: Colors.white,
             ),
           ),
 
-          const SizedBox(height: 6),
+          const SizedBox(height: 7),
 
           const Text(
-            'Establece cuánto dinero deseas administrar durante este mes.',
-            textAlign: TextAlign.center,
-            style: TextStyle(color: AppColors.textSecondary),
+            'Define cuánto dinero deseas administrar durante este mes.',
+            style: TextStyle(color: Colors.white70, fontSize: 14, height: 1.4),
           ),
 
           if (spent > 0) ...[
-            const SizedBox(height: 18),
+            const SizedBox(height: 22),
 
-            const Divider(),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: 0.10),
+                borderRadius: BorderRadius.circular(14),
+              ),
+              child: Row(
+                children: [
+                  const Icon(
+                    Icons.receipt_long_outlined,
+                    color: Colors.white70,
+                  ),
 
-            const SizedBox(height: 12),
+                  const SizedBox(width: 12),
 
-            const Text(
-              'Ya gastaste este mes',
-              style: TextStyle(color: AppColors.textSecondary),
-            ),
-
-            const SizedBox(height: 4),
-
-            Text(
-              _moneyFormat.format(spent),
-              style: const TextStyle(
-                fontSize: 22,
-                fontWeight: FontWeight.bold,
-                color: AppColors.textPrimary,
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'Ya gastaste este mes',
+                          style: TextStyle(color: Colors.white70, fontSize: 12),
+                        ),
+                        const SizedBox(height: 3),
+                        Text(
+                          _moneyFormat.format(spent),
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 19,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
               ),
             ),
           ],
@@ -348,9 +416,9 @@ class _NoBudgetCard extends StatelessWidget {
   }
 }
 
-// ==================================================
-// RESUMEN DE PRESUPUESTO
-// ==================================================
+// ====================================================
+// RESUMEN DEL PRESUPUESTO
+// ====================================================
 
 class _BudgetSummaryCard extends StatelessWidget {
   final double budget;
@@ -371,91 +439,172 @@ class _BudgetSummaryCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final indicatorColor = isOverBudget
-        ? AppColors.error
-        : percentageUsed >= 80
-        ? AppColors.warning
-        : AppColors.primary;
-
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(22),
+      padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
-        color: AppColors.surface,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: AppColors.border),
+        color: AppColors.primaryDark,
+        borderRadius: BorderRadius.circular(22),
+        boxShadow: [
+          BoxShadow(
+            color: AppColors.primaryDark.withValues(alpha: 0.17),
+            blurRadius: 18,
+            offset: const Offset(0, 7),
+          ),
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
-            'Presupuesto mensual',
-            style: TextStyle(color: AppColors.textSecondary),
+          Row(
+            children: [
+              Container(
+                width: 44,
+                height: 44,
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: const Icon(
+                  Icons.account_balance_wallet_outlined,
+                  color: Colors.white,
+                  size: 23,
+                ),
+              ),
+
+              const SizedBox(width: 12),
+
+              Expanded(
+                child: Text(
+                  isOverBudget ? 'Presupuesto excedido' : 'Presupuesto mensual',
+                  style: const TextStyle(color: Colors.white70, fontSize: 14),
+                ),
+              ),
+            ],
           ),
 
-          const SizedBox(height: 5),
+          if (isOverBudget) ...[
+            const SizedBox(height: 16),
+
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+              decoration: BoxDecoration(
+                color: AppColors.errorSoft,
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: const Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    Icons.warning_amber_rounded,
+                    color: AppColors.error,
+                    size: 17,
+                  ),
+                  SizedBox(width: 6),
+                  Text(
+                    'LÍMITE SUPERADO',
+                    style: TextStyle(
+                      color: AppColors.error,
+                      fontSize: 11,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+
+          const SizedBox(height: 20),
+
+          // ==================================================
+          // PRESUPUESTO
+          // ==================================================
+          const Text(
+            'Presupuesto',
+            style: TextStyle(color: Colors.white60, fontSize: 12),
+          ),
+
+          const SizedBox(height: 4),
 
           Text(
             _moneyFormat.format(budget),
             style: const TextStyle(
-              fontSize: 30,
+              fontSize: 32,
+              height: 1,
               fontWeight: FontWeight.bold,
-              color: AppColors.textPrimary,
+              color: Colors.white,
             ),
           ),
 
-          const SizedBox(height: 22),
+          const SizedBox(height: 24),
 
-          LinearProgressIndicator(
-            value: progress,
-            minHeight: 9,
+          // ==================================================
+          // BARRA
+          // ==================================================
+          ClipRRect(
             borderRadius: BorderRadius.circular(10),
-            backgroundColor: AppColors.border,
-            color: indicatorColor,
+            child: LinearProgressIndicator(
+              value: progress,
+              minHeight: 8,
+              backgroundColor: Colors.white.withValues(alpha: 0.18),
+              color: Colors.white,
+            ),
           ),
 
-          const SizedBox(height: 12),
+          const SizedBox(height: 10),
 
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text(
                 '${percentageUsed.toStringAsFixed(1)}% utilizado',
-                style: TextStyle(
-                  color: indicatorColor,
-                  fontWeight: FontWeight.w600,
-                ),
+                style: const TextStyle(color: Colors.white60, fontSize: 12),
               ),
               Text(
-                isOverBudget ? 'Excedido' : 'Disponible',
-                style: const TextStyle(color: AppColors.textSecondary),
+                isOverBudget
+                    ? 'Exceso: ${_moneyFormat.format(spent - budget)}'
+                    : 'Dentro del límite',
+                style: const TextStyle(color: Colors.white70, fontSize: 12),
               ),
             ],
           ),
 
           const SizedBox(height: 22),
 
-          Row(
-            children: [
-              Expanded(
-                child: _BudgetMetric(
-                  label: 'Gastado',
-                  value: _moneyFormat.format(spent),
+          // ==================================================
+          // MÉTRICAS
+          // ==================================================
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(vertical: 15),
+            decoration: BoxDecoration(
+              color: Colors.white.withValues(alpha: 0.09),
+              borderRadius: BorderRadius.circular(15),
+            ),
+            child: Row(
+              children: [
+                Expanded(
+                  child: _DarkMetric(
+                    label: 'Gastado',
+                    value: _moneyFormat.format(spent),
+                  ),
                 ),
-              ),
 
-              Container(height: 42, width: 1, color: AppColors.border),
-
-              Expanded(
-                child: _BudgetMetric(
-                  label: isOverBudget ? 'Excedido por' : 'Disponible',
-                  value: _moneyFormat.format(available.abs()),
-                  valueColor: isOverBudget
-                      ? AppColors.error
-                      : AppColors.primaryDark,
+                Container(
+                  width: 1,
+                  height: 40,
+                  color: Colors.white.withValues(alpha: 0.18),
                 ),
-              ),
-            ],
+
+                Expanded(
+                  child: _DarkMetric(
+                    label: isOverBudget ? 'Saldo' : 'Disponible',
+                    value: _moneyFormat.format(available),
+                    isNegative: isOverBudget,
+                  ),
+                ),
+              ],
+            ),
           ),
         ],
       ),
@@ -463,15 +612,19 @@ class _BudgetSummaryCard extends StatelessWidget {
   }
 }
 
-class _BudgetMetric extends StatelessWidget {
+// ====================================================
+// MÉTRICA OSCURA
+// ====================================================
+
+class _DarkMetric extends StatelessWidget {
   final String label;
   final String value;
-  final Color? valueColor;
+  final bool isNegative;
 
-  const _BudgetMetric({
+  const _DarkMetric({
     required this.label,
     required this.value,
-    this.valueColor,
+    this.isNegative = false,
   });
 
   @override
@@ -480,8 +633,7 @@ class _BudgetMetric extends StatelessWidget {
       children: [
         Text(
           label,
-          textAlign: TextAlign.center,
-          style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
+          style: const TextStyle(color: Colors.white60, fontSize: 11),
         ),
 
         const SizedBox(height: 5),
@@ -491,13 +643,172 @@ class _BudgetMetric extends StatelessWidget {
           child: Text(
             value,
             style: TextStyle(
-              fontSize: 17,
+              color: isNegative ? const Color(0xFFFFC7C2) : Colors.white,
               fontWeight: FontWeight.bold,
-              color: valueColor ?? AppColors.textPrimary,
+              fontSize: 17,
             ),
           ),
         ),
       ],
+    );
+  }
+}
+
+// ====================================================
+// ALERTA
+// ====================================================
+
+class _ExceededBudgetAlert extends StatelessWidget {
+  final double exceededAmount;
+
+  const _ExceededBudgetAlert({required this.exceededAmount});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AppColors.errorSoft,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppColors.error.withValues(alpha: 0.18)),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 42,
+            height: 42,
+            decoration: const BoxDecoration(
+              color: Colors.white,
+              shape: BoxShape.circle,
+            ),
+            child: const Icon(Icons.error_outline, color: AppColors.error),
+          ),
+
+          const SizedBox(width: 13),
+
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Presupuesto excedido',
+                  style: TextStyle(
+                    color: AppColors.error,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+
+                const SizedBox(height: 3),
+
+                Text(
+                  'Has superado tu presupuesto por '
+                  '${_moneyFormat.format(exceededAmount)}.',
+                  style: const TextStyle(
+                    color: AppColors.textSecondary,
+                    fontSize: 13,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ====================================================
+// FORMULARIO
+// ====================================================
+
+class _BudgetFormCard extends StatelessWidget {
+  final TextEditingController controller;
+  final bool hasBudget;
+  final bool isSaving;
+  final Future<void> Function() onSave;
+
+  const _BudgetFormCard({
+    required this.controller,
+    required this.hasBudget,
+    required this.isSaving,
+    required this.onSave,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            hasBudget ? 'Actualizar presupuesto' : 'Ingresa tu presupuesto',
+            style: const TextStyle(
+              fontSize: 20,
+              fontWeight: FontWeight.bold,
+              color: AppColors.textPrimary,
+            ),
+          ),
+
+          const SizedBox(height: 6),
+
+          Text(
+            hasBudget
+                ? 'Puedes modificarlo si tus planes financieros cambian.'
+                : 'Define cuánto deseas gastar durante este mes.',
+            style: const TextStyle(color: AppColors.textSecondary, height: 1.4),
+          ),
+
+          const SizedBox(height: 18),
+
+          TextField(
+            controller: controller,
+            enabled: !isSaving,
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            inputFormatters: [
+              FilteringTextInputFormatter.allow(RegExp(r'^\d*[.,]?\d{0,2}')),
+            ],
+            decoration: const InputDecoration(
+              labelText: 'Cantidad',
+              hintText: 'Ej. 10000.00',
+              prefixIcon: Icon(Icons.attach_money),
+            ),
+          ),
+
+          const SizedBox(height: 18),
+
+          SizedBox(
+            width: double.infinity,
+            child: FilledButton.icon(
+              onPressed: isSaving ? null : onSave,
+              icon: isSaving
+                  ? const SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2.3,
+                        color: Colors.white,
+                      ),
+                    )
+                  : const Icon(Icons.save_outlined),
+              label: Text(
+                isSaving
+                    ? 'Guardando...'
+                    : hasBudget
+                    ? 'Actualizar presupuesto'
+                    : 'Crear presupuesto',
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

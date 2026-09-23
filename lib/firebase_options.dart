@@ -17,19 +17,13 @@ import 'package:flutter/foundation.dart'
 class DefaultFirebaseOptions {
   static FirebaseOptions get currentPlatform {
     if (kIsWeb) {
-      throw UnsupportedError(
-        'DefaultFirebaseOptions have not been configured for web - '
-        'you can reconfigure this by running the FlutterFire CLI again.',
-      );
+      return web;
     }
     switch (defaultTargetPlatform) {
       case TargetPlatform.android:
         return android;
       case TargetPlatform.iOS:
-        throw UnsupportedError(
-          'DefaultFirebaseOptions have not been configured for ios - '
-          'you can reconfigure this by running the FlutterFire CLI again.',
-        );
+        return ios;
       case TargetPlatform.macOS:
         throw UnsupportedError(
           'DefaultFirebaseOptions have not been configured for macos - '
@@ -58,5 +52,22 @@ class DefaultFirebaseOptions {
     messagingSenderId: '825635816619',
     projectId: 'fintrack-2703e',
     storageBucket: 'fintrack-2703e.firebasestorage.app',
+  );
+  static const FirebaseOptions web = FirebaseOptions(
+    apiKey: 'AIzaSyAI05xLhQ-7DyM1Cv7ctU1js6mPSY0AeP4',
+    appId: '1:825635816619:web:ff850d30b8f5e4a395a3ee',
+    messagingSenderId: '825635816619',
+    projectId: 'fintrack-2703e',
+    authDomain: 'fintrack-2703e.firebaseapp.com',
+    storageBucket: 'fintrack-2703e.firebasestorage.app',
+  );
+
+  static const FirebaseOptions ios = FirebaseOptions(
+    apiKey: 'AIzaSyDR4Zf_yTFfLnFAsKRVuBGeW3oo4ikgOVE',
+    appId: '1:825635816619:ios:e3f5b3f3f27d615c95a3ee',
+    messagingSenderId: '825635816619',
+    projectId: 'fintrack-2703e',
+    storageBucket: 'fintrack-2703e.firebasestorage.app',
+    iosBundleId: 'com.fintrack.fintrack',
   );
 }

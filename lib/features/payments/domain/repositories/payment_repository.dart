@@ -1,11 +1,11 @@
 import '../payment.dart';
 
 abstract class PaymentRepository {
-  List<Payment> getPayments();
+  Stream<List<Payment>> watchPayments();
 
-  void addPayment(Payment payment);
+  Future<void> addPayment(Payment payment);
 
-  void updatePayment(Payment payment);
+  Future<void> updatePayment(Payment payment);
 
-  void deletePayment(String id);
+  Future<void> deletePayment(String id);
 }

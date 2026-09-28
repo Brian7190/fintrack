@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../app/router.dart';
 import '../../../app/theme.dart';
+import '../data/session_preferences.dart';
 import 'auth_provider.dart';
 
 class LoginPage extends ConsumerStatefulWidget {
@@ -23,6 +24,9 @@ class _LoginPageState extends ConsumerState<LoginPage> {
 
   bool _obscurePassword = true;
   bool _isLoading = false;
+
+  // Checkbox.
+  bool _rememberSession = false;
 
   @override
   void dispose() {
@@ -76,24 +80,20 @@ class _LoginPageState extends ConsumerState<LoginPage> {
     try {
       final repository = ref.read(authRepositoryProvider);
 
-      final user = await repository.signIn(
+      await repository.signIn(
         email: _emailController.text.trim(),
         password: _passwordController.text,
       );
+
+      // Guardamos únicamente la decisión del usuario.
+      // NO guardamos correo ni contraseña.
+      await SessionPreferences.setRememberSession(_rememberSession);
 
       if (!mounted) {
         return;
       }
 
       ScaffoldMessenger.of(context).hideCurrentSnackBar();
-
-      // Por ahora el administrador también entra al flujo normal.
-      // En el siguiente paso crearemos AppRoutes.admin
-      // y su Panel Administrativo.
-      if (user.isAdmin) {
-        context.go(AppRoutes.home);
-        return;
-      }
 
       context.go(AppRoutes.home);
     } on FirebaseAuthException catch (error) {
@@ -102,7 +102,7 @@ class _LoginPageState extends ConsumerState<LoginPage> {
       }
 
       _showError(_firebaseMessage(error));
-    } catch (error) {
+    } catch (_) {
       if (!mounted) {
         return;
       }
@@ -120,8 +120,6 @@ class _LoginPageState extends ConsumerState<LoginPage> {
   String _firebaseMessage(FirebaseAuthException error) {
     switch (error.code) {
       case 'invalid-credential':
-        return 'El correo o la contraseña son incorrectos.';
-
       case 'wrong-password':
         return 'El correo o la contraseña son incorrectos.';
 
@@ -166,6 +164,9 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                 key: _formKey,
                 child: Column(
                   children: [
+                    // ========================================
+                    // LOGO
+                    // ========================================
                     Container(
                       width: 92,
                       height: 92,
@@ -201,7 +202,9 @@ class _LoginPageState extends ConsumerState<LoginPage> {
 
                     const SizedBox(height: 36),
 
+                    // ========================================
                     // CORREO
+                    // ========================================
                     TextFormField(
                       controller: _emailController,
                       enabled: !_isLoading,
@@ -217,7 +220,9 @@ class _LoginPageState extends ConsumerState<LoginPage> {
 
                     const SizedBox(height: 16),
 
+                    // ========================================
                     // CONTRASEÑA
+                    // ========================================
                     TextFormField(
                       controller: _passwordController,
                       enabled: !_isLoading,
@@ -252,9 +257,54 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                       ),
                     ),
 
-                    const SizedBox(height: 24),
+                    const SizedBox(height: 12),
 
+                    // ========================================
+                    // MANTENER SESIÓN
+                    // ========================================
+                    Material(
+                      color: AppColors.surfaceAlt,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        side: const BorderSide(color: AppColors.border),
+                      ),
+                      clipBehavior: Clip.antiAlias,
+                      child: CheckboxListTile(
+                        value: _rememberSession,
+                        onChanged: _isLoading
+                            ? null
+                            : (value) {
+                                setState(() {
+                                  _rememberSession = value ?? false;
+                                });
+                              },
+                        controlAffinity: ListTileControlAffinity.leading,
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 2,
+                        ),
+                        title: const Text(
+                          'Mantener sesión iniciada',
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        subtitle: const Text(
+                          'Accede automáticamente la próxima vez.',
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: AppColors.textSecondary,
+                          ),
+                        ),
+                      ),
+                    ),
+
+                    const SizedBox(height: 22),
+
+                    // ========================================
                     // INICIAR SESIÓN
+                    // ========================================
                     SizedBox(
                       width: double.infinity,
                       child: FilledButton(
@@ -274,16 +324,15 @@ class _LoginPageState extends ConsumerState<LoginPage> {
 
                     const SizedBox(height: 18),
 
+                    // ========================================
                     // REGISTRO
+                    // ========================================
                     Wrap(
                       alignment: WrapAlignment.center,
                       crossAxisAlignment: WrapCrossAlignment.center,
                       spacing: 4,
                       children: [
-                        const Text(
-                          '¿No tienes una cuenta?',
-                          textAlign: TextAlign.center,
-                        ),
+                        const Text('¿No tienes una cuenta?'),
                         TextButton(
                           onPressed: _isLoading
                               ? null

@@ -34,13 +34,11 @@ Future<void> _signOut(BuildContext context, WidgetRef ref) async {
     await ref.read(authRepositoryProvider).signOut();
 
     ref.invalidate(expensesProvider);
-
     ref.invalidate(expenseFilterProvider);
 
     ref.invalidate(paymentsProvider);
 
     ref.invalidate(budgetStateProvider);
-
     ref.invalidate(budgetProvider);
 
     if (!context.mounted) {
@@ -72,6 +70,8 @@ class HomePage extends ConsumerWidget {
 
     final userName = profileState.asData?.value?.name;
 
+    final isAdmin = ref.watch(isAdminProvider);
+
     final budget = ref.watch(budgetProvider);
 
     final spent = ref.watch(currentMonthExpensesTotalProvider);
@@ -98,6 +98,21 @@ class HomePage extends ConsumerWidget {
       appBar: AppBar(
         title: const Text('FinTrack'),
         actions: [
+          // ==================================================
+          // ADMIN
+          // ==================================================
+          if (isAdmin)
+            IconButton(
+              tooltip: 'Administración',
+              onPressed: () {
+                context.go(AppRoutes.admin);
+              },
+              icon: const Icon(Icons.admin_panel_settings_outlined),
+            ),
+
+          // ==================================================
+          // CERRAR SESIÓN
+          // ==================================================
           IconButton(
             tooltip: 'Cerrar sesión',
             onPressed: () async {
@@ -105,6 +120,7 @@ class HomePage extends ConsumerWidget {
             },
             icon: const Icon(Icons.logout),
           ),
+
           const SizedBox(width: 6),
         ],
       ),
@@ -137,7 +153,7 @@ class HomePage extends ConsumerWidget {
                 ),
 
               // ==================================================
-              // AVISO DE PRESUPUESTO EXCEDIDO
+              // ALERTA DE EXCESO
               // ==================================================
               if (isOverBudget) ...[
                 const SizedBox(height: 14),
@@ -327,7 +343,7 @@ class _WelcomeHeader extends StatelessWidget {
 }
 
 // ====================================================
-// TARJETA PRINCIPAL DEL PRESUPUESTO
+// TARJETA PRINCIPAL
 // ====================================================
 
 class _BudgetHero extends StatelessWidget {
@@ -393,9 +409,6 @@ class _BudgetHero extends StatelessWidget {
             ],
           ),
 
-          // ==================================================
-          // BADGE DE EXCESO
-          // ==================================================
           if (isOverBudget) ...[
             const SizedBox(height: 16),
 
@@ -429,9 +442,6 @@ class _BudgetHero extends StatelessWidget {
 
           const SizedBox(height: 20),
 
-          // ==================================================
-          // SALDO
-          // ==================================================
           FittedBox(
             fit: BoxFit.scaleDown,
             alignment: Alignment.centerLeft,
@@ -472,9 +482,6 @@ class _BudgetHero extends StatelessWidget {
 
           const SizedBox(height: 24),
 
-          // ==================================================
-          // PROGRESO
-          // ==================================================
           ClipRRect(
             borderRadius: BorderRadius.circular(10),
             child: LinearProgressIndicator(
@@ -599,7 +606,7 @@ class _NoBudgetHero extends StatelessWidget {
 }
 
 // ====================================================
-// ALERTA DE EXCESO
+// ALERTA PRESUPUESTO
 // ====================================================
 
 class _BudgetExceededNotice extends StatelessWidget {
@@ -642,9 +649,7 @@ class _BudgetExceededNotice extends StatelessWidget {
                     fontWeight: FontWeight.bold,
                   ),
                 ),
-
                 const SizedBox(height: 3),
-
                 Text(
                   'Has superado el límite mensual por '
                   '${_moneyFormat.format(amount)}.',

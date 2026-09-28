@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
+import '../../../app/router.dart';
 import '../../../app/theme.dart';
 import '../../auth/presentation/auth_provider.dart';
 import '../domain/admin_user_summary.dart';
@@ -13,19 +14,11 @@ class AdminDashboardPage extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    // ==================================================
-    // VALIDAR QUE SEA ADMINISTRADOR
-    // ==================================================
-
     final isAdmin = ref.watch(isAdminProvider);
 
     if (!isAdmin) {
       return const _AccessDenied();
     }
-
-    // ==================================================
-    // DATOS DEL PANEL
-    // ==================================================
 
     final usersState = ref.watch(adminUsersProvider);
 
@@ -34,26 +27,39 @@ class AdminDashboardPage extends ConsumerWidget {
     final totalLogins = ref.watch(totalLoginCountProvider);
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Administración')),
+      appBar: AppBar(
+        // ==================================================
+        // VOLVER A INICIO
+        // ==================================================
+        leading: IconButton(
+          tooltip: 'Volver a Inicio',
+          onPressed: () {
+            context.go(AppRoutes.home);
+          },
+          icon: const Icon(Icons.arrow_back),
+        ),
+
+        title: const Text('Administración'),
+      ),
       body: SafeArea(
         child: usersState.when(
-          // ==============================================
+          // ==================================================
           // CARGANDO
-          // ==============================================
+          // ==================================================
           loading: () {
             return const Center(child: CircularProgressIndicator());
           },
 
-          // ==============================================
+          // ==================================================
           // ERROR
-          // ==============================================
+          // ==================================================
           error: (error, stackTrace) {
             return _AdminError(error: error);
           },
 
-          // ==============================================
+          // ==================================================
           // DATOS
-          // ==============================================
+          // ==================================================
           data: (users) {
             final normalUsers = users.where((user) => !user.isAdmin).toList();
 
@@ -67,16 +73,16 @@ class AdminDashboardPage extends ConsumerWidget {
                 physics: const AlwaysScrollableScrollPhysics(),
                 padding: const EdgeInsets.fromLTRB(18, 18, 18, 100),
                 children: [
-                  // ======================================
+                  // ==================================================
                   // ENCABEZADO
-                  // ======================================
+                  // ==================================================
                   const _AdminHeader(),
 
                   const SizedBox(height: 22),
 
-                  // ======================================
+                  // ==================================================
                   // MÉTRICAS
-                  // ======================================
+                  // ==================================================
                   Row(
                     children: [
                       Expanded(
@@ -86,7 +92,9 @@ class AdminDashboardPage extends ConsumerWidget {
                           value: '$totalUsers',
                         ),
                       ),
+
                       const SizedBox(width: 12),
+
                       Expanded(
                         child: _MetricCard(
                           icon: Icons.login_outlined,
@@ -99,9 +107,9 @@ class AdminDashboardPage extends ConsumerWidget {
 
                   const SizedBox(height: 30),
 
-                  // ======================================
+                  // ==================================================
                   // USUARIOS
-                  // ======================================
+                  // ==================================================
                   const Text(
                     'Usuarios',
                     style: TextStyle(
@@ -114,7 +122,7 @@ class AdminDashboardPage extends ConsumerWidget {
                   const SizedBox(height: 5),
 
                   const Text(
-                    'Selecciona un usuario para consultar su información y presupuesto actual.',
+                    'Selecciona un usuario para consultar su actividad y situación financiera actual.',
                     style: TextStyle(
                       fontSize: 13,
                       height: 1.4,
@@ -282,7 +290,7 @@ class _MetricCard extends StatelessWidget {
 }
 
 // ====================================================
-// TARJETA DEL USUARIO
+// USUARIO
 // ====================================================
 
 class _UserCard extends StatelessWidget {
@@ -316,9 +324,9 @@ class _UserCard extends StatelessWidget {
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
-                // ======================================
-                // ICONO
-                // ======================================
+                // ==================================================
+                // AVATAR
+                // ==================================================
                 Container(
                   width: 48,
                   height: 48,
@@ -335,15 +343,15 @@ class _UserCard extends StatelessWidget {
 
                 const SizedBox(width: 14),
 
-                // ======================================
+                // ==================================================
                 // INFORMACIÓN
-                // ======================================
+                // ==================================================
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        user.name.isEmpty ? 'Sin nombre' : user.name,
+                        user.name.trim().isEmpty ? 'Sin nombre' : user.name,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
@@ -396,9 +404,9 @@ class _UserCard extends StatelessWidget {
 
                 const SizedBox(width: 10),
 
-                // ======================================
-                // ACCESOS
-                // ======================================
+                // ==================================================
+                // ACCESOS + FLECHA
+                // ==================================================
                 Column(
                   children: [
                     Container(
@@ -501,19 +509,24 @@ class _AccessDenied extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const Scaffold(
+    return Scaffold(
+      appBar: AppBar(title: const Text('Administración')),
       body: SafeArea(
         child: Center(
           child: Padding(
-            padding: EdgeInsets.all(28),
+            padding: const EdgeInsets.all(28),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Icon(Icons.lock_outline, size: 56, color: AppColors.error),
+                const Icon(
+                  Icons.lock_outline,
+                  size: 56,
+                  color: AppColors.error,
+                ),
 
-                SizedBox(height: 16),
+                const SizedBox(height: 16),
 
-                Text(
+                const Text(
                   'Acceso restringido',
                   style: TextStyle(
                     fontSize: 22,
@@ -522,12 +535,22 @@ class _AccessDenied extends StatelessWidget {
                   ),
                 ),
 
-                SizedBox(height: 8),
+                const SizedBox(height: 8),
 
-                Text(
+                const Text(
                   'Esta sección está disponible únicamente para administradores.',
                   textAlign: TextAlign.center,
                   style: TextStyle(color: AppColors.textSecondary),
+                ),
+
+                const SizedBox(height: 20),
+
+                FilledButton.icon(
+                  onPressed: () {
+                    context.go(AppRoutes.home);
+                  },
+                  icon: const Icon(Icons.home_outlined),
+                  label: const Text('Volver a Inicio'),
                 ),
               ],
             ),
@@ -579,6 +602,16 @@ class _AdminError extends StatelessWidget {
                   : 'Inténtalo nuevamente.',
               textAlign: TextAlign.center,
               style: const TextStyle(color: AppColors.textSecondary),
+            ),
+
+            const SizedBox(height: 20),
+
+            OutlinedButton.icon(
+              onPressed: () {
+                context.go(AppRoutes.home);
+              },
+              icon: const Icon(Icons.arrow_back),
+              label: const Text('Volver'),
             ),
           ],
         ),

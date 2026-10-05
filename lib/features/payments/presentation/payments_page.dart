@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
 import '../../../app/theme.dart';
+import '../../calendar/calendar_service.dart';
 import '../domain/payment.dart';
 import 'payment_form_sheet.dart';
 import 'payments_provider.dart';
@@ -21,9 +22,36 @@ class PaymentsPage extends ConsumerWidget {
     );
   }
 
+  Future<void> _addToCalendar(BuildContext context, Payment payment) async {
+    try {
+      final opened = await CalendarService.addPaymentToGoogleCalendar(payment);
+
+      if (!context.mounted) {
+        return;
+      }
+
+      if (!opened) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('No fue posible abrir Google Calendar.'),
+          ),
+        );
+      }
+    } catch (_) {
+      if (!context.mounted) {
+        return;
+      }
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('No fue posible abrir el calendario.')),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final payments = ref.watch(paymentsProvider);
+
     final total = ref.watch(totalPendingPaymentsProvider);
 
     return Scaffold(
@@ -55,6 +83,9 @@ class PaymentsPage extends ConsumerWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
+                    // =====================================
+                    // RESUMEN
+                    // =====================================
                     Container(
                       width: double.infinity,
                       padding: const EdgeInsets.all(20),
@@ -69,7 +100,9 @@ class PaymentsPage extends ConsumerWidget {
                             'Pagos pendientes',
                             style: TextStyle(color: Colors.white70),
                           ),
+
                           const SizedBox(height: 6),
+
                           Text(
                             '\$${total.toStringAsFixed(2)}',
                             style: const TextStyle(
@@ -78,7 +111,9 @@ class PaymentsPage extends ConsumerWidget {
                               fontWeight: FontWeight.bold,
                             ),
                           ),
+
                           const SizedBox(height: 4),
+
                           Text(
                             '${payments.length} '
                             '${payments.length == 1 ? 'pago próximo' : 'pagos próximos'}',
@@ -90,6 +125,9 @@ class PaymentsPage extends ConsumerWidget {
 
                     const SizedBox(height: 24),
 
+                    // =====================================
+                    // TÍTULO
+                    // =====================================
                     const Text(
                       'Calendario de pagos',
                       style: TextStyle(
@@ -98,13 +136,29 @@ class PaymentsPage extends ConsumerWidget {
                       ),
                     ),
 
-                    const SizedBox(height: 12),
+                    const SizedBox(height: 6),
 
+                    const Text(
+                      'Puedes enviar cualquiera de tus pagos próximos a Google Calendar.',
+                      style: TextStyle(
+                        color: AppColors.textSecondary,
+                        fontSize: 13,
+                      ),
+                    ),
+
+                    const SizedBox(height: 14),
+
+                    // =====================================
+                    // LISTA
+                    // =====================================
                     for (final payment in payments)
                       _PaymentCard(
                         payment: payment,
                         onTap: () {
                           _openForm(context, payment: payment);
+                        },
+                        onCalendar: () {
+                          _addToCalendar(context, payment);
                         },
                       ),
                   ],
@@ -114,6 +168,10 @@ class PaymentsPage extends ConsumerWidget {
     );
   }
 }
+
+// ====================================================
+// SIN PAGOS
+// ====================================================
 
 class _EmptyPayments extends StatelessWidget {
   final VoidCallback onAdd;
@@ -141,19 +199,25 @@ class _EmptyPayments extends StatelessWidget {
                 color: AppColors.primary,
               ),
             ),
+
             const SizedBox(height: 20),
+
             const Text(
               'No tienes pagos próximos',
               textAlign: TextAlign.center,
               style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
             ),
+
             const SizedBox(height: 8),
+
             const Text(
               'Agrega servicios, recibos o cualquier pago que no quieras olvidar.',
               textAlign: TextAlign.center,
               style: TextStyle(color: AppColors.textSecondary),
             ),
+
             const SizedBox(height: 24),
+
             FilledButton.icon(
               onPressed: onAdd,
               icon: const Icon(Icons.add),
@@ -166,25 +230,36 @@ class _EmptyPayments extends StatelessWidget {
   }
 }
 
+// ====================================================
+// TARJETA DE PAGO
+// ====================================================
+
 class _PaymentCard extends StatelessWidget {
   final Payment payment;
   final VoidCallback onTap;
+  final VoidCallback onCalendar;
 
-  const _PaymentCard({required this.payment, required this.onTap});
+  const _PaymentCard({
+    required this.payment,
+    required this.onTap,
+    required this.onCalendar,
+  });
 
   @override
   Widget build(BuildContext context) {
     final date = DateFormat('dd/MM/yyyy').format(payment.dueDate);
 
-    final days = payment.dueDate
-        .difference(
-          DateTime(
-            DateTime.now().year,
-            DateTime.now().month,
-            DateTime.now().day,
-          ),
-        )
-        .inDays;
+    final now = DateTime.now();
+
+    final today = DateTime(now.year, now.month, now.day);
+
+    final paymentDate = DateTime(
+      payment.dueDate.year,
+      payment.dueDate.month,
+      payment.dueDate.day,
+    );
+
+    final days = paymentDate.difference(today).inDays;
 
     String status;
 
@@ -199,39 +274,62 @@ class _PaymentCard extends StatelessWidget {
     }
 
     return Container(
-      margin: const EdgeInsets.only(bottom: 10),
+      margin: const EdgeInsets.only(bottom: 12),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(14),
         border: Border.all(color: const Color(0xFFE5E7EB)),
       ),
-      child: ListTile(
-        onTap: onTap,
-        leading: Container(
-          width: 44,
-          height: 44,
-          decoration: BoxDecoration(
-            color: const Color(0xFFE9F6EF),
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: const Icon(Icons.event_outlined, color: AppColors.primary),
-        ),
-        title: Text(
-          payment.name,
-          style: const TextStyle(fontWeight: FontWeight.bold),
-        ),
-        subtitle: Text('$date • $status'),
-        trailing: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
+      child: Column(
+        children: [
+          ListTile(
+            onTap: onTap,
+            leading: Container(
+              width: 44,
+              height: 44,
+              decoration: BoxDecoration(
+                color: const Color(0xFFE9F6EF),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: const Icon(Icons.event_outlined, color: AppColors.primary),
+            ),
+
+            title: Text(
+              payment.name,
+              style: const TextStyle(fontWeight: FontWeight.bold),
+            ),
+
+            subtitle: Text('$date • $status'),
+
+            trailing: Text(
               '\$${payment.amount.toStringAsFixed(2)}',
               style: const TextStyle(fontWeight: FontWeight.bold),
             ),
-            const SizedBox(width: 4),
-            const Icon(Icons.chevron_right, color: AppColors.textSecondary),
-          ],
-        ),
+          ),
+
+          const Divider(height: 1),
+
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+            child: Row(
+              children: [
+                TextButton.icon(
+                  onPressed: onCalendar,
+                  icon: const Icon(Icons.calendar_month_outlined, size: 19),
+                  label: const Text('Agregar al calendario'),
+                ),
+
+                const Spacer(),
+
+                IconButton(
+                  tooltip: 'Editar pago',
+                  onPressed: onTap,
+                  icon: const Icon(Icons.edit_outlined, size: 20),
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }

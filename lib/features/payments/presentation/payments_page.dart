@@ -1,15 +1,21 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
 import '../../../app/theme.dart';
 import '../../calendar/calendar_service.dart';
+import '../../calendar/google_calendar_connect_button.dart';
 import '../domain/payment.dart';
 import 'payment_form_sheet.dart';
 import 'payments_provider.dart';
 
 class PaymentsPage extends ConsumerWidget {
   const PaymentsPage({super.key});
+
+  // ====================================================
+  // ABRIR FORMULARIO
+  // ====================================================
 
   void _openForm(BuildContext context, {Payment? payment}) {
     showModalBottomSheet<void>(
@@ -22,31 +28,9 @@ class PaymentsPage extends ConsumerWidget {
     );
   }
 
-  Future<void> _addToCalendar(BuildContext context, Payment payment) async {
-    try {
-      final opened = await CalendarService.addPaymentToGoogleCalendar(payment);
-
-      if (!context.mounted) {
-        return;
-      }
-
-      if (!opened) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('No fue posible abrir Google Calendar.'),
-          ),
-        );
-      }
-    } catch (_) {
-      if (!context.mounted) {
-        return;
-      }
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('No fue posible abrir el calendario.')),
-      );
-    }
-  }
+  // ====================================================
+  // BUILD
+  // ====================================================
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -62,6 +46,9 @@ class PaymentsPage extends ConsumerWidget {
         ),
       ),
 
+      // ==================================================
+      // AGREGAR PAGO
+      // ==================================================
       floatingActionButton: FloatingActionButton(
         backgroundColor: AppColors.primary,
         foregroundColor: Colors.white,
@@ -71,6 +58,9 @@ class PaymentsPage extends ConsumerWidget {
         child: const Icon(Icons.add),
       ),
 
+      // ==================================================
+      // CONTENIDO
+      // ==================================================
       body: SafeArea(
         child: payments.isEmpty
             ? _EmptyPayments(
@@ -126,7 +116,7 @@ class PaymentsPage extends ConsumerWidget {
                     const SizedBox(height: 24),
 
                     // =====================================
-                    // TÍTULO
+                    // CALENDARIO DE PAGOS
                     // =====================================
                     const Text(
                       'Calendario de pagos',
@@ -139,26 +129,179 @@ class PaymentsPage extends ConsumerWidget {
                     const SizedBox(height: 6),
 
                     const Text(
-                      'Puedes enviar cualquiera de tus pagos próximos a Google Calendar.',
+                      'Tus pagos se sincronizan con Google Calendar.',
                       style: TextStyle(
                         color: AppColors.textSecondary,
                         fontSize: 13,
                       ),
                     ),
 
+                    // =====================================
+                    // CONEXIÓN GOOGLE CALENDAR WEB
+                    // =====================================
+                    if (kIsWeb) ...[
+                      const SizedBox(height: 14),
+
+                      FutureBuilder<void>(
+                        future: CalendarService.initialize(),
+                        builder: (context, initializationSnapshot) {
+                          if (initializationSnapshot.connectionState !=
+                              ConnectionState.done) {
+                            return const Center(
+                              child: Padding(
+                                padding: EdgeInsets.all(12),
+                                child: CircularProgressIndicator(),
+                              ),
+                            );
+                          }
+
+                          if (initializationSnapshot.hasError) {
+                            return Container(
+                              width: double.infinity,
+                              padding: const EdgeInsets.all(14),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFFFF1F1),
+                                borderRadius: BorderRadius.circular(14),
+                              ),
+                              child: const Row(
+                                children: [
+                                  Icon(Icons.error_outline, color: Colors.red),
+                                  SizedBox(width: 10),
+                                  Expanded(
+                                    child: Text(
+                                      'No fue posible inicializar Google Calendar.',
+                                      style: TextStyle(fontSize: 12),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            );
+                          }
+
+                          return StreamBuilder(
+                            stream: CalendarService.accountChanges,
+                            initialData: CalendarService.currentGoogleUser,
+                            builder: (context, accountSnapshot) {
+                              final googleUser = accountSnapshot.data;
+
+                              // =================================
+                              // CUENTA CONECTADA
+                              // =================================
+
+                              if (googleUser != null) {
+                                return Container(
+                                  width: double.infinity,
+                                  padding: const EdgeInsets.all(12),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFFE9F6EF),
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                  child: Row(
+                                    children: [
+                                      const Icon(
+                                        Icons.check_circle,
+                                        color: AppColors.primary,
+                                      ),
+
+                                      const SizedBox(width: 10),
+
+                                      Expanded(
+                                        child: Column(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
+                                          children: [
+                                            const Text(
+                                              'Google Calendar conectado',
+                                              style: TextStyle(
+                                                fontSize: 12,
+                                                fontWeight: FontWeight.w600,
+                                              ),
+                                            ),
+
+                                            const SizedBox(height: 2),
+
+                                            Text(
+                                              googleUser.email,
+                                              overflow: TextOverflow.ellipsis,
+                                              style: const TextStyle(
+                                                fontSize: 11,
+                                                color: AppColors.textSecondary,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                );
+                              }
+
+                              // =================================
+                              // CONECTAR CUENTA
+                              // =================================
+
+                              return Container(
+                                width: double.infinity,
+                                padding: const EdgeInsets.all(14),
+                                decoration: BoxDecoration(
+                                  color: AppColors.surfaceAlt,
+                                  borderRadius: BorderRadius.circular(14),
+                                  border: Border.all(color: AppColors.border),
+                                ),
+                                child: const Column(
+                                  children: [
+                                    Icon(
+                                      Icons.calendar_month_outlined,
+                                      color: AppColors.primary,
+                                      size: 30,
+                                    ),
+
+                                    SizedBox(height: 8),
+
+                                    Text(
+                                      'Conecta Google Calendar',
+                                      textAlign: TextAlign.center,
+                                      style: TextStyle(
+                                        fontSize: 14,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+
+                                    SizedBox(height: 4),
+
+                                    Text(
+                                      'Conecta tu cuenta de Google para crear, editar y eliminar automáticamente los eventos de tus pagos.',
+                                      textAlign: TextAlign.center,
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        color: AppColors.textSecondary,
+                                      ),
+                                    ),
+
+                                    SizedBox(height: 14),
+
+                                    GoogleCalendarConnectButton(),
+                                  ],
+                                ),
+                              );
+                            },
+                          );
+                        },
+                      ),
+
+                      const SizedBox(height: 8),
+                    ],
+
                     const SizedBox(height: 14),
 
                     // =====================================
-                    // LISTA
+                    // LISTADO DE PAGOS
                     // =====================================
                     for (final payment in payments)
                       _PaymentCard(
                         payment: payment,
                         onTap: () {
                           _openForm(context, payment: payment);
-                        },
-                        onCalendar: () {
-                          _addToCalendar(context, payment);
                         },
                       ),
                   ],
@@ -216,6 +359,14 @@ class _EmptyPayments extends StatelessWidget {
               style: TextStyle(color: AppColors.textSecondary),
             ),
 
+            const SizedBox(height: 10),
+
+            const Text(
+              'Los pagos pueden sincronizarse con Google Calendar.',
+              textAlign: TextAlign.center,
+              style: TextStyle(color: AppColors.textSecondary, fontSize: 12),
+            ),
+
             const SizedBox(height: 24),
 
             FilledButton.icon(
@@ -237,16 +388,15 @@ class _EmptyPayments extends StatelessWidget {
 class _PaymentCard extends StatelessWidget {
   final Payment payment;
   final VoidCallback onTap;
-  final VoidCallback onCalendar;
 
-  const _PaymentCard({
-    required this.payment,
-    required this.onTap,
-    required this.onCalendar,
-  });
+  const _PaymentCard({required this.payment, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
+    // ==================================================
+    // FECHA
+    // ==================================================
+
     final date = DateFormat('dd/MM/yyyy').format(payment.dueDate);
 
     final now = DateTime.now();
@@ -261,6 +411,10 @@ class _PaymentCard extends StatelessWidget {
 
     final days = paymentDate.difference(today).inDays;
 
+    // ==================================================
+    // ESTADO
+    // ==================================================
+
     String status;
 
     if (days == 0) {
@@ -273,6 +427,10 @@ class _PaymentCard extends StatelessWidget {
       status = 'Vencido';
     }
 
+    // ==================================================
+    // TARJETA
+    // ==================================================
+
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       decoration: BoxDecoration(
@@ -280,56 +438,121 @@ class _PaymentCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(14),
         border: Border.all(color: const Color(0xFFE5E7EB)),
       ),
-      child: Column(
-        children: [
-          ListTile(
-            onTap: onTap,
-            leading: Container(
-              width: 44,
-              height: 44,
-              decoration: BoxDecoration(
-                color: const Color(0xFFE9F6EF),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: const Icon(Icons.event_outlined, color: AppColors.primary),
-            ),
-
-            title: Text(
-              payment.name,
-              style: const TextStyle(fontWeight: FontWeight.bold),
-            ),
-
-            subtitle: Text('$date • $status'),
-
-            trailing: Text(
-              '\$${payment.amount.toStringAsFixed(2)}',
-              style: const TextStyle(fontWeight: FontWeight.bold),
-            ),
-          ),
-
-          const Divider(height: 1),
-
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(14),
+          child: Padding(
+            padding: const EdgeInsets.all(14),
             child: Row(
               children: [
-                TextButton.icon(
-                  onPressed: onCalendar,
-                  icon: const Icon(Icons.calendar_month_outlined, size: 19),
-                  label: const Text('Agregar al calendario'),
+                // =======================================
+                // ICONO
+                // =======================================
+                Container(
+                  width: 46,
+                  height: 46,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFE9F6EF),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: const Icon(
+                    Icons.event_outlined,
+                    color: AppColors.primary,
+                  ),
                 ),
 
-                const Spacer(),
+                const SizedBox(width: 14),
 
-                IconButton(
-                  tooltip: 'Editar pago',
-                  onPressed: onTap,
-                  icon: const Icon(Icons.edit_outlined, size: 20),
+                // =======================================
+                // INFORMACIÓN
+                // =======================================
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        payment.name,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 15,
+                        ),
+                      ),
+
+                      const SizedBox(height: 4),
+
+                      Text(
+                        '$date • $status',
+                        style: const TextStyle(
+                          color: AppColors.textSecondary,
+                          fontSize: 12,
+                        ),
+                      ),
+
+                      // =================================
+                      // GOOGLE CALENDAR
+                      // =================================
+                      if (payment.isSyncedWithGoogleCalendar) ...[
+                        const SizedBox(height: 7),
+
+                        const Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              Icons.calendar_month_outlined,
+                              size: 14,
+                              color: AppColors.primary,
+                            ),
+
+                            SizedBox(width: 4),
+
+                            Text(
+                              'Google Calendar',
+                              style: TextStyle(
+                                color: AppColors.primary,
+                                fontSize: 11,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+
+                const SizedBox(width: 10),
+
+                // =======================================
+                // MONTO
+                // =======================================
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Text(
+                      '\$${payment.amount.toStringAsFixed(2)}',
+                      style: const TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 15,
+                      ),
+                    ),
+
+                    const SizedBox(height: 5),
+
+                    const Icon(
+                      Icons.chevron_right,
+                      color: AppColors.textSecondary,
+                      size: 21,
+                    ),
+                  ],
                 ),
               ],
             ),
           ),
-        ],
+        ),
       ),
     );
   }

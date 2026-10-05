@@ -23,7 +23,12 @@ class _PaymentFormSheetState extends ConsumerState<PaymentFormSheet> {
 
   DateTime? _selectedDate;
 
+  bool _isSaving = false;
+  bool _isDeleting = false;
+
   bool get isEditing => widget.payment != null;
+
+  bool get _isBusy => _isSaving || _isDeleting;
 
   @override
   void initState() {
@@ -48,7 +53,15 @@ class _PaymentFormSheetState extends ConsumerState<PaymentFormSheet> {
     super.dispose();
   }
 
+  // ====================================================
+  // SELECCIONAR FECHA
+  // ====================================================
+
   Future<void> _selectDate() async {
+    if (_isBusy) {
+      return;
+    }
+
     final now = DateTime.now();
 
     final date = await showDatePicker(
@@ -67,10 +80,14 @@ class _PaymentFormSheetState extends ConsumerState<PaymentFormSheet> {
     });
   }
 
-  void _save() {
+  // ====================================================
+  // GUARDAR
+  // ====================================================
+
+  Future<void> _save() async {
     final valid = _formKey.currentState?.validate() ?? false;
 
-    if (!valid) {
+    if (!valid || _isBusy) {
       return;
     }
 
@@ -82,32 +99,74 @@ class _PaymentFormSheetState extends ConsumerState<PaymentFormSheet> {
       return;
     }
 
+    FocusScope.of(context).unfocus();
+
     final name = _nameController.text.trim();
 
     final amount = double.parse(_amountController.text.replaceAll(',', '.'));
 
-    if (isEditing) {
-      ref
-          .read(paymentsProvider.notifier)
-          .updatePayment(
-            id: widget.payment!.id,
-            name: name,
-            amount: amount,
-            dueDate: _selectedDate!,
-          );
-    } else {
-      ref
-          .read(paymentsProvider.notifier)
-          .addPayment(name: name, amount: amount, dueDate: _selectedDate!);
-    }
+    setState(() {
+      _isSaving = true;
+    });
 
-    Navigator.of(context).pop();
+    try {
+      if (isEditing) {
+        await ref
+            .read(paymentsProvider.notifier)
+            .updatePayment(
+              id: widget.payment!.id,
+              name: name,
+              amount: amount,
+              dueDate: _selectedDate!,
+            );
+      } else {
+        await ref
+            .read(paymentsProvider.notifier)
+            .addPayment(name: name, amount: amount, dueDate: _selectedDate!);
+      }
+
+      if (!mounted) {
+        return;
+      }
+
+      Navigator.of(context).pop();
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            isEditing
+                ? 'Pago actualizado correctamente'
+                : 'Pago agregado correctamente',
+          ),
+        ),
+      );
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+
+      _showError(
+        isEditing
+            ? 'No fue posible actualizar el pago o Google Calendar.'
+            : 'No fue posible guardar el pago o sincronizarlo con Google Calendar.',
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isSaving = false;
+        });
+      }
+    }
   }
+
+  // ====================================================
+  // ELIMINAR
+  // ====================================================
 
   Future<void> _delete() async {
     final payment = widget.payment;
 
-    if (payment == null) {
+    if (payment == null || _isBusy) {
       return;
     }
 
@@ -116,7 +175,11 @@ class _PaymentFormSheetState extends ConsumerState<PaymentFormSheet> {
       builder: (dialogContext) {
         return AlertDialog(
           title: const Text('Eliminar pago'),
-          content: Text('¿Deseas eliminar "${payment.name}"?'),
+          content: Text(
+            '¿Deseas eliminar "${payment.name}"?\n\n'
+            'Si está sincronizado con Google Calendar, '
+            'el evento también será eliminado.',
+          ),
           actions: [
             TextButton(
               onPressed: () {
@@ -139,10 +202,42 @@ class _PaymentFormSheetState extends ConsumerState<PaymentFormSheet> {
       return;
     }
 
-    ref.read(paymentsProvider.notifier).deletePayment(payment.id);
+    setState(() {
+      _isDeleting = true;
+    });
 
-    Navigator.of(context).pop();
+    try {
+      await ref.read(paymentsProvider.notifier).deletePayment(payment.id);
+
+      if (!mounted) {
+        return;
+      }
+
+      Navigator.of(context).pop();
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Pago eliminado correctamente')),
+      );
+    } catch (_) {
+      if (!mounted) {
+        return;
+      }
+
+      _showError(
+        'No fue posible eliminar el pago o su evento de Google Calendar.',
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isDeleting = false;
+        });
+      }
+    }
   }
+
+  // ====================================================
+  // VALIDACIONES
+  // ====================================================
 
   String? _validateName(String? value) {
     if (value == null || value.trim().isEmpty) {
@@ -154,6 +249,7 @@ class _PaymentFormSheetState extends ConsumerState<PaymentFormSheet> {
 
   String? _validateAmount(String? value) {
     final text = value?.replaceAll(',', '.') ?? '';
+
     final amount = double.tryParse(text);
 
     if (text.isEmpty) {
@@ -166,6 +262,22 @@ class _PaymentFormSheetState extends ConsumerState<PaymentFormSheet> {
 
     return null;
   }
+
+  // ====================================================
+  // ERROR
+  // ====================================================
+
+  void _showError(String message) {
+    ScaffoldMessenger.of(context).hideCurrentSnackBar();
+
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
+  }
+
+  // ====================================================
+  // BUILD
+  // ====================================================
 
   @override
   Widget build(BuildContext context) {
@@ -187,6 +299,9 @@ class _PaymentFormSheetState extends ConsumerState<PaymentFormSheet> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              // ==========================================
+              // TÍTULO
+              // ==========================================
               Text(
                 isEditing ? 'Editar próximo pago' : 'Nuevo próximo pago',
                 style: const TextStyle(
@@ -195,10 +310,26 @@ class _PaymentFormSheetState extends ConsumerState<PaymentFormSheet> {
                 ),
               ),
 
+              const SizedBox(height: 6),
+
+              Text(
+                isEditing
+                    ? 'Los cambios también se aplicarán al evento de Google Calendar.'
+                    : 'El pago se sincronizará automáticamente con Google Calendar.',
+                style: TextStyle(
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  fontSize: 12,
+                ),
+              ),
+
               const SizedBox(height: 20),
 
+              // ==========================================
+              // NOMBRE
+              // ==========================================
               TextFormField(
                 controller: _nameController,
+                enabled: !_isBusy,
                 textCapitalization: TextCapitalization.sentences,
                 validator: _validateName,
                 decoration: const InputDecoration(
@@ -210,8 +341,12 @@ class _PaymentFormSheetState extends ConsumerState<PaymentFormSheet> {
 
               const SizedBox(height: 16),
 
+              // ==========================================
+              // MONTO
+              // ==========================================
               TextFormField(
                 controller: _amountController,
+                enabled: !_isBusy,
                 keyboardType: const TextInputType.numberWithOptions(
                   decimal: true,
                 ),
@@ -230,8 +365,11 @@ class _PaymentFormSheetState extends ConsumerState<PaymentFormSheet> {
 
               const SizedBox(height: 16),
 
+              // ==========================================
+              // FECHA
+              // ==========================================
               InkWell(
-                onTap: _selectDate,
+                onTap: _isBusy ? null : _selectDate,
                 borderRadius: BorderRadius.circular(12),
                 child: InputDecorator(
                   decoration: const InputDecoration(
@@ -242,27 +380,112 @@ class _PaymentFormSheetState extends ConsumerState<PaymentFormSheet> {
                 ),
               ),
 
-              const SizedBox(height: 24),
+              const SizedBox(height: 16),
 
-              SizedBox(
+              // ==========================================
+              // GOOGLE CALENDAR
+              // ==========================================
+              Container(
                 width: double.infinity,
-                child: FilledButton.icon(
-                  onPressed: _save,
-                  icon: Icon(isEditing ? Icons.save_outlined : Icons.add),
-                  label: Text(isEditing ? 'Guardar cambios' : 'Agregar pago'),
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFE9F6EF),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(
+                      Icons.calendar_month_outlined,
+                      color: Color(0xFF238B57),
+                    ),
+
+                    const SizedBox(width: 12),
+
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            'Google Calendar',
+                            style: TextStyle(fontWeight: FontWeight.w600),
+                          ),
+
+                          const SizedBox(height: 2),
+
+                          Text(
+                            widget.payment?.isSyncedWithGoogleCalendar == true
+                                ? 'Este pago está sincronizado.'
+                                : 'Se sincronizará al guardar.',
+                            style: const TextStyle(
+                              fontSize: 11,
+                              color: Colors.black54,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+
+                    if (widget.payment?.isSyncedWithGoogleCalendar == true)
+                      const Icon(
+                        Icons.check_circle,
+                        color: Color(0xFF238B57),
+                        size: 20,
+                      ),
+                  ],
                 ),
               ),
 
+              const SizedBox(height: 24),
+
+              // ==========================================
+              // GUARDAR
+              // ==========================================
+              SizedBox(
+                width: double.infinity,
+                child: FilledButton.icon(
+                  onPressed: _isBusy ? null : _save,
+                  icon: _isSaving
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Colors.white,
+                          ),
+                        )
+                      : Icon(isEditing ? Icons.save_outlined : Icons.add),
+                  label: Text(
+                    _isSaving
+                        ? isEditing
+                              ? 'Actualizando...'
+                              : 'Guardando...'
+                        : isEditing
+                        ? 'Guardar cambios'
+                        : 'Agregar pago',
+                  ),
+                ),
+              ),
+
+              // ==========================================
+              // ELIMINAR
+              // ==========================================
               if (isEditing) ...[
                 const SizedBox(height: 8),
+
                 SizedBox(
                   width: double.infinity,
                   child: TextButton.icon(
-                    onPressed: _delete,
-                    icon: const Icon(Icons.delete_outline, color: Colors.red),
-                    label: const Text(
-                      'Eliminar pago',
-                      style: TextStyle(color: Colors.red),
+                    onPressed: _isBusy ? null : _delete,
+                    icon: _isDeleting
+                        ? const SizedBox(
+                            width: 17,
+                            height: 17,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.delete_outline, color: Colors.red),
+                    label: Text(
+                      _isDeleting ? 'Eliminando...' : 'Eliminar pago',
+                      style: const TextStyle(color: Colors.red),
                     ),
                   ),
                 ),

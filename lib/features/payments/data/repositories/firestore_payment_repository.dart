@@ -16,6 +16,10 @@ class FirestorePaymentRepository implements PaymentRepository {
     return _firestore.collection('users').doc(userId).collection('payments');
   }
 
+  // ====================================================
+  // ESCUCHAR PAGOS
+  // ====================================================
+
   @override
   Stream<List<Payment>> watchPayments() {
     return _paymentsCollection.snapshots().map((snapshot) {
@@ -27,16 +31,25 @@ class FirestorePaymentRepository implements PaymentRepository {
     });
   }
 
+  // ====================================================
+  // AGREGAR
+  // ====================================================
+
   @override
   Future<void> addPayment(Payment payment) async {
     await _paymentsCollection.doc(payment.id).set({
       'name': payment.name,
       'amount': payment.amount,
       'dueDate': Timestamp.fromDate(payment.dueDate),
+      'googleCalendarEventId': payment.googleCalendarEventId,
       'createdAt': FieldValue.serverTimestamp(),
       'updatedAt': FieldValue.serverTimestamp(),
     });
   }
+
+  // ====================================================
+  // ACTUALIZAR
+  // ====================================================
 
   @override
   Future<void> updatePayment(Payment payment) async {
@@ -44,14 +57,23 @@ class FirestorePaymentRepository implements PaymentRepository {
       'name': payment.name,
       'amount': payment.amount,
       'dueDate': Timestamp.fromDate(payment.dueDate),
+      'googleCalendarEventId': payment.googleCalendarEventId,
       'updatedAt': FieldValue.serverTimestamp(),
     });
   }
+
+  // ====================================================
+  // ELIMINAR
+  // ====================================================
 
   @override
   Future<void> deletePayment(String id) async {
     await _paymentsCollection.doc(id).delete();
   }
+
+  // ====================================================
+  // CONVERTIR FIRESTORE → PAYMENT
+  // ====================================================
 
   Payment _fromFirestore(DocumentSnapshot<Map<String, dynamic>> document) {
     final data = document.data() ?? <String, dynamic>{};
@@ -71,6 +93,7 @@ class FirestorePaymentRepository implements PaymentRepository {
       name: data['name'] as String? ?? '',
       amount: (data['amount'] as num?)?.toDouble() ?? 0,
       dueDate: dueDate,
+      googleCalendarEventId: data['googleCalendarEventId'] as String?,
     );
   }
 }

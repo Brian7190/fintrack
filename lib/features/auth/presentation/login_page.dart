@@ -19,14 +19,18 @@ class _LoginPageState extends ConsumerState<LoginPage> {
   final GlobalKey<FormState> _formKey = GlobalKey<FormState>();
 
   final TextEditingController _emailController = TextEditingController();
-
   final TextEditingController _passwordController = TextEditingController();
 
   bool _obscurePassword = true;
   bool _isLoading = false;
-
-  // Checkbox.
   bool _rememberSession = false;
+
+  @override
+  void initState() {
+    super.initState();
+
+    _loadRememberPreference();
+  }
 
   @override
   void dispose() {
@@ -35,6 +39,26 @@ class _LoginPageState extends ConsumerState<LoginPage> {
 
     super.dispose();
   }
+
+  // ====================================================
+  // CARGAR PREFERENCIA DE SESIÓN
+  // ====================================================
+
+  Future<void> _loadRememberPreference() async {
+    final rememberSession = await SessionPreferences.getRememberSession();
+
+    if (!mounted) {
+      return;
+    }
+
+    setState(() {
+      _rememberSession = rememberSession;
+    });
+  }
+
+  // ====================================================
+  // VALIDAR CORREO
+  // ====================================================
 
   String? _validateEmail(String? value) {
     final email = value?.trim() ?? '';
@@ -52,6 +76,10 @@ class _LoginPageState extends ConsumerState<LoginPage> {
     return null;
   }
 
+  // ====================================================
+  // VALIDAR CONTRASEÑA
+  // ====================================================
+
   String? _validatePassword(String? value) {
     if (value == null || value.isEmpty) {
       return 'Ingresa tu contraseña';
@@ -63,6 +91,10 @@ class _LoginPageState extends ConsumerState<LoginPage> {
 
     return null;
   }
+
+  // ====================================================
+  // LOGIN CON CORREO Y CONTRASEÑA
+  // ====================================================
 
   Future<void> _login() async {
     final isValid = _formKey.currentState?.validate() ?? false;
@@ -85,8 +117,6 @@ class _LoginPageState extends ConsumerState<LoginPage> {
         password: _passwordController.text,
       );
 
-      // Guardamos únicamente la decisión del usuario.
-      // NO guardamos correo ni contraseña.
       await SessionPreferences.setRememberSession(_rememberSession);
 
       if (!mounted) {
@@ -117,6 +147,60 @@ class _LoginPageState extends ConsumerState<LoginPage> {
     }
   }
 
+  // ====================================================
+  // LOGIN CON GOOGLE
+  // ====================================================
+
+  Future<void> _loginWithGoogle() async {
+    if (_isLoading) {
+      return;
+    }
+
+    FocusScope.of(context).unfocus();
+
+    setState(() {
+      _isLoading = true;
+    });
+
+    try {
+      final repository = ref.read(authRepositoryProvider);
+
+      await repository.signInWithGoogle();
+
+      await SessionPreferences.setRememberSession(_rememberSession);
+
+      if (!mounted) {
+        return;
+      }
+
+      ScaffoldMessenger.of(context).hideCurrentSnackBar();
+
+      context.go(AppRoutes.home);
+    } on FirebaseAuthException catch (error) {
+      if (!mounted) {
+        return;
+      }
+
+      _showError(_firebaseMessage(error));
+    } catch (_) {
+      if (!mounted) {
+        return;
+      }
+
+      _showError('No fue posible iniciar sesión con Google.');
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
+    }
+  }
+
+  // ====================================================
+  // MENSAJES DE FIREBASE
+  // ====================================================
+
   String _firebaseMessage(FirebaseAuthException error) {
     switch (error.code) {
       case 'invalid-credential':
@@ -138,10 +222,32 @@ class _LoginPageState extends ConsumerState<LoginPage> {
       case 'network-request-failed':
         return 'No se pudo conectar con Firebase. Revisa tu conexión a Internet.';
 
+      case 'account-exists-with-different-credential':
+        return 'Ya existe una cuenta con este correo utilizando otro método de inicio de sesión.';
+
+      case 'credential-already-in-use':
+        return 'Esta cuenta de Google ya está vinculada a otro usuario.';
+
+      case 'popup-closed-by-user':
+        return 'Se cerró la ventana de Google antes de completar el inicio de sesión.';
+
+      case 'popup-blocked':
+        return 'El navegador bloqueó la ventana de inicio de sesión de Google.';
+
+      case 'operation-not-allowed':
+        return 'El inicio de sesión con Google no está habilitado en Firebase.';
+
+      case 'google-id-token-missing':
+        return 'Google no pudo completar la autenticación. Inténtalo nuevamente.';
+
       default:
         return 'No fue posible iniciar sesión. (${error.code})';
     }
   }
+
+  // ====================================================
+  // MOSTRAR ERROR
+  // ====================================================
 
   void _showError(String message) {
     ScaffoldMessenger.of(context).hideCurrentSnackBar();
@@ -150,6 +256,10 @@ class _LoginPageState extends ConsumerState<LoginPage> {
       context,
     ).showSnackBar(SnackBar(content: Text(message)));
   }
+
+  // ====================================================
+  // BUILD
+  // ====================================================
 
   @override
   Widget build(BuildContext context) {
@@ -164,9 +274,9 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                 key: _formKey,
                 child: Column(
                   children: [
-                    // ========================================
-                    // LOGO
-                    // ========================================
+                    // =====================================
+                    // LOGO FINTRACK
+                    // =====================================
                     Container(
                       width: 92,
                       height: 92,
@@ -183,6 +293,9 @@ class _LoginPageState extends ConsumerState<LoginPage> {
 
                     const SizedBox(height: 20),
 
+                    // =====================================
+                    // NOMBRE
+                    // =====================================
                     const Text(
                       'FinTrack',
                       style: TextStyle(
@@ -202,15 +315,16 @@ class _LoginPageState extends ConsumerState<LoginPage> {
 
                     const SizedBox(height: 36),
 
-                    // ========================================
+                    // =====================================
                     // CORREO
-                    // ========================================
+                    // =====================================
                     TextFormField(
                       controller: _emailController,
                       enabled: !_isLoading,
                       keyboardType: TextInputType.emailAddress,
                       textInputAction: TextInputAction.next,
                       autocorrect: false,
+                      autofillHints: const [AutofillHints.email],
                       validator: _validateEmail,
                       decoration: const InputDecoration(
                         labelText: 'Correo electrónico',
@@ -220,9 +334,9 @@ class _LoginPageState extends ConsumerState<LoginPage> {
 
                     const SizedBox(height: 16),
 
-                    // ========================================
+                    // =====================================
                     // CONTRASEÑA
-                    // ========================================
+                    // =====================================
                     TextFormField(
                       controller: _passwordController,
                       enabled: !_isLoading,
@@ -230,6 +344,7 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                       textInputAction: TextInputAction.done,
                       enableSuggestions: false,
                       autocorrect: false,
+                      autofillHints: const [AutofillHints.password],
                       validator: _validatePassword,
                       onFieldSubmitted: (_) {
                         _login();
@@ -257,11 +372,11 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                       ),
                     ),
 
-                    const SizedBox(height: 12),
+                    const SizedBox(height: 16),
 
-                    // ========================================
+                    // =====================================
                     // MANTENER SESIÓN
-                    // ========================================
+                    // =====================================
                     Material(
                       color: AppColors.surfaceAlt,
                       shape: RoundedRectangleBorder(
@@ -300,11 +415,11 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                       ),
                     ),
 
-                    const SizedBox(height: 22),
+                    const SizedBox(height: 24),
 
-                    // ========================================
-                    // INICIAR SESIÓN
-                    // ========================================
+                    // =====================================
+                    // BOTÓN LOGIN NORMAL
+                    // =====================================
                     SizedBox(
                       width: double.infinity,
                       child: FilledButton(
@@ -322,17 +437,84 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                       ),
                     ),
 
+                    const SizedBox(height: 20),
+
+                    // =====================================
+                    // SEPARADOR
+                    // =====================================
+                    const Row(
+                      children: [
+                        Expanded(child: Divider()),
+
+                        Padding(
+                          padding: EdgeInsets.symmetric(horizontal: 14),
+                          child: Text(
+                            'o',
+                            style: TextStyle(color: AppColors.textSecondary),
+                          ),
+                        ),
+
+                        Expanded(child: Divider()),
+                      ],
+                    ),
+
+                    const SizedBox(height: 20),
+
+                    // =====================================
+                    // LOGIN CON GOOGLE
+                    // =====================================
+                    SizedBox(
+                      width: double.infinity,
+                      child: OutlinedButton(
+                        onPressed: _isLoading ? null : _loginWithGoogle,
+                        style: OutlinedButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(vertical: 14),
+                          side: const BorderSide(color: AppColors.border),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            // =============================
+                            // LOGO REAL DE GOOGLE
+                            // =============================
+                            Image.asset(
+                              'assets/images/google_logo.png',
+                              width: 22,
+                              height: 22,
+                              fit: BoxFit.contain,
+                            ),
+
+                            const SizedBox(width: 12),
+
+                            const Text(
+                              'Continuar con Google',
+                              style: TextStyle(
+                                fontWeight: FontWeight.w600,
+                                color: AppColors.textPrimary,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+
                     const SizedBox(height: 18),
 
-                    // ========================================
+                    // =====================================
                     // REGISTRO
-                    // ========================================
+                    // =====================================
                     Wrap(
                       alignment: WrapAlignment.center,
                       crossAxisAlignment: WrapCrossAlignment.center,
                       spacing: 4,
                       children: [
-                        const Text('¿No tienes una cuenta?'),
+                        const Text(
+                          '¿No tienes una cuenta?',
+                          textAlign: TextAlign.center,
+                        ),
                         TextButton(
                           onPressed: _isLoading
                               ? null

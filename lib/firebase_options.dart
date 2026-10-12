@@ -68,6 +68,8 @@ class DefaultFirebaseOptions {
     messagingSenderId: '825635816619',
     projectId: 'fintrack-2703e',
     storageBucket: 'fintrack-2703e.firebasestorage.app',
+    androidClientId:
+        '825635816619-71jr0tnar8su48t3bhl6c23mdu7a9pi1.apps.googleusercontent.com',
     iosBundleId: 'com.fintrack.fintrack',
   );
 }

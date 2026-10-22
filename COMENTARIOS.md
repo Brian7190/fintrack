@@ -59,5 +59,22 @@ Se recomienda establecer un límite para las cantidades de dinero que se pueden 
 
 También sería importante revisar el manejo de cantidades grandes para prevenir el cierre inesperado de la aplicación.
 
+Aquí tienes una versión **más sencilla, clara y directa**, perfecta para decirla en una reunión o enviarla por mensaje sin rodeos técnicos:
+
+---
+
+### Comentarios Edson SanJuan Trejo
+
+> "En general me parece que la aplicación va por un buen camino y en lo personal tiene un buen diseno. La combinación de colores se ve muy bien y la parte de registrar gastos y ver las gráficas circulares le da un plus y hace que se vea profecional ademas es muy útil para el usuario.
+> Sin embargo, viéndolo desde el punto de vista práctico, hay varios detalles que debemos corregir.
+>
+> ## Errores que encontre
+> * **Proteger las entradas de datos:** Falta poner límites para que el usuario no escriba números gigantescos que rompan la pantalla o hagan que la app se cierre. También hay que cuidar que en el nombre no metan símbolos ni números.
+> * **Arreglar la conexión con Google:** Darle prioridad a resolver el error al guardar en Google Calendar y el acceso con la cuenta de Google, ya que es una función muy importante que la gente va a querer usar.
+> * **Cuidar los pequeños detalles:** Cambiar las palabras que se quedaron en inglés en el calendario y hacer que la gráfica de barras muestre los nombres de las categorías en lugar de solo números, para que todo se entienda a la primera.
+> 
+> 
+> En resumen, la app me gusta y funciona bien en lo principal, solo es cuestión de corregir esos pequeños errores para que la experiencia sea completamente fluida."
+
 
 

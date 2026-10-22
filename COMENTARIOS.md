@@ -27,3 +27,32 @@ aunque los colores actuales sí son de mi agrado. También estaría bien que cua
 En general me gustó la aplicación, se ve bonita y las funciones que pude probar, como registrar gastos y 
 consultar las estadísticas, me parecieron útiles. Lo único que sí me dio problema fue lo de Google Calendar,
 porque quería probar cómo se guardaban los pagos y no me dejó. Fuera de eso, siento que está bastante bien y es una aplicación que sí podría servir para llevar un control de nuestros gastos.
+
+
+
+
+
+
+Comentarios Adriana Mendoza Dajui :
+Errores encontrados durante las pruebas de la aplicación
+
+1. Error en el campo de nombre durante el registro
+
+El primer error que encontré fue en el apartado de registro de usuarios. Al ingresar el nombre, la aplicación permite utilizar números y caracteres especiales sin mostrar ninguna advertencia o mensaje de error. Considero que este campo debería contar con una validación para evitar que se registren nombres con caracteres no permitidos.
+
+2. Falta de validación del correo electrónico
+
+En el apartado de correo electrónico, la aplicación permite registrar una dirección de correo que no existe, sin comprobar si realmente es válida o pertenece a un usuario. Sería recomendable implementar una verificación del correo electrónico para evitar registros con direcciones inexistentes.
+
+3. Error al ingresar cantidades de dinero demasiado grandes
+
+Al momento de ingresar un presupuesto con una cantidad demasiado grande, por ejemplo, 50000000000000000000000000000000000000000000000, la aplicación presenta problemas en la visualización de la información.
+
+En el apartado de "gastos", los números se salen del contenedor y provocan que el texto y otros elementos de la pantalla se deformen, afectando el diseño de la aplicación.
+
+Además, al intentar ingresar al apartado de "Estadísticas" después de registrar esta cantidad, la aplicación se queda trabada y posteriormente se cierra de manera inesperada.
+
+Se recomienda establecer un límite para las cantidades de dinero que se pueden ingresar y mejorar la adaptación de los elementos visuales para evitar que se desconfigure la interfaz. También sería importante revisar el manejo de cantidades grandes para prevenir el cierre inesperado de la aplicación.
+
+
+

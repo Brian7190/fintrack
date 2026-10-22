@@ -63,7 +63,7 @@ Aquí tienes una versión **más sencilla, clara y directa**, perfecta para deci
 
 ---
 
-### Comentarios Edson SanJuan Trejo
+## Comentarios Edson SanJuan Trejo
 
 "En general me parece que la aplicación va por un buen camino y en lo personal tiene un buen diseno. La combinación de colores se ve muy bien y la parte de registrar gastos y ver las gráficas circulares le da un plus y hace que se vea profecional ademas es muy útil para el usuario.
 Sin embargo, viéndolo desde el punto de vista práctico, hay varios detalles que debemos corregir.

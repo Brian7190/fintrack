@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
 import '../../../app/theme.dart';
+import '../../../core/input_validators.dart';
 import '../../expenses/presentation/expenses_provider.dart';
 import '../domain/monthly_budget.dart';
 import 'budget_provider.dart';
@@ -41,19 +42,18 @@ class _BudgetPageState extends ConsumerState<BudgetPage> {
       return;
     }
 
-    final text = _budgetController.text.trim().replaceAll(',', '.');
+    final text = _budgetController.text.trim();
+    final validation = InputValidators.moneyAmount(
+      text,
+      emptyMessage: 'Ingresa un presupuesto',
+    );
 
-    if (text.isEmpty) {
-      _showMessage('Ingresa un presupuesto');
+    if (validation != null) {
+      _showMessage(validation);
       return;
     }
 
-    final amount = double.tryParse(text);
-
-    if (amount == null || amount <= 0) {
-      _showMessage('Ingresa una cantidad válida');
-      return;
-    }
+    final amount = InputValidators.parseAmount(text)!;
 
     final spent = ref.read(currentMonthExpensesTotalProvider);
 
@@ -221,8 +221,10 @@ class _BudgetPageState extends ConsumerState<BudgetPage> {
               // ==================================================
               if (isOverBudget) ...[
                 const SizedBox(height: 16),
-
                 _ExceededBudgetAlert(exceededAmount: spent - budget),
+              ] else if (budget != null && percentageUsed >= 80) ...[
+                const SizedBox(height: 16),
+                _BudgetNearLimitNotice(percentageUsed: percentageUsed),
               ],
 
               const SizedBox(height: 28),
@@ -718,6 +720,42 @@ class _ExceededBudgetAlert extends StatelessWidget {
   }
 }
 
+class _BudgetNearLimitNotice extends StatelessWidget {
+  final double percentageUsed;
+
+  const _BudgetNearLimitNotice({required this.percentageUsed});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AppColors.warningSoft,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppColors.warning.withValues(alpha: 0.25)),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.warning_amber_rounded, color: AppColors.warning),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              'Has utilizado ${percentageUsed.toStringAsFixed(1)}% de tu presupuesto. '
+              'Considera reducir tus gastos.',
+              style: const TextStyle(
+                color: AppColors.textPrimary,
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 // ====================================================
 // FORMULARIO
 // ====================================================
@@ -774,6 +812,7 @@ class _BudgetFormCard extends StatelessWidget {
             keyboardType: const TextInputType.numberWithOptions(decimal: true),
             inputFormatters: [
               FilteringTextInputFormatter.allow(RegExp(r'^\d*[.,]?\d{0,2}')),
+              LengthLimitingTextInputFormatter(11),
             ],
             decoration: const InputDecoration(
               labelText: 'Cantidad',

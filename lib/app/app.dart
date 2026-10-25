@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 
 import 'router.dart';
 import 'theme.dart';
@@ -12,6 +13,9 @@ class FinTrackApp extends StatelessWidget {
       title: 'FinTrack',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.light,
+      locale: const Locale('es', 'MX'),
+      supportedLocales: const [Locale('es', 'MX'), Locale('es')],
+      localizationsDelegates: GlobalMaterialLocalizations.delegates,
       routerConfig: appRouter,
 
       // Evita que las pantallas se estiren

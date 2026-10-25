@@ -1,5 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
+import '../../../../core/input_validators.dart';
+
 import '../../domain/monthly_budget.dart';
 import '../../domain/repositories/budget_repository.dart';
 
@@ -63,11 +65,21 @@ class FirestoreBudgetRepository implements BudgetRepository {
     final updatedAt = data['updatedAt'];
 
     return MonthlyBudget(
-      amount: (data['amount'] as num?)?.toDouble() ?? 0,
+      amount: _safeAmount(data['amount']),
       month: (data['month'] as num?)?.toInt() ?? now.month,
       year: (data['year'] as num?)?.toInt() ?? now.year,
       createdAt: createdAt is Timestamp ? createdAt.toDate() : now,
       updatedAt: updatedAt is Timestamp ? updatedAt.toDate() : now,
     );
+  }
+
+  double _safeAmount(Object? value) {
+    final amount = value is num ? value.toDouble() : 0.0;
+
+    if (!amount.isFinite || amount <= 0 || amount > FinanceLimits.maxAmount) {
+      return 0.0;
+    }
+
+    return amount;
   }
 }

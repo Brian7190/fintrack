@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../app/theme.dart';
+import '../../../core/input_validators.dart';
 import 'auth_provider.dart';
 
 class RegisterPage extends ConsumerStatefulWidget {
@@ -74,7 +75,7 @@ class _RegisterPageState extends ConsumerState<RegisterPage> {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text(
-            'Cuenta creada correctamente. Ahora puedes iniciar sesión.',
+            'Cuenta creada. Revisa tu correo para verificarla antes de iniciar sesión.',
           ),
         ),
       );
@@ -189,19 +190,7 @@ class _RegisterPageState extends ConsumerState<RegisterPage> {
                       enabled: !_isLoading,
                       textCapitalization: TextCapitalization.words,
                       textInputAction: TextInputAction.next,
-                      validator: (value) {
-                        final name = value?.trim() ?? '';
-
-                        if (name.isEmpty) {
-                          return 'Ingresa tu nombre';
-                        }
-
-                        if (name.length < 3) {
-                          return 'Ingresa un nombre válido';
-                        }
-
-                        return null;
-                      },
+                      validator: InputValidators.personName,
                       decoration: const InputDecoration(
                         labelText: 'Nombre completo',
                         prefixIcon: Icon(Icons.person_outline),
@@ -217,23 +206,7 @@ class _RegisterPageState extends ConsumerState<RegisterPage> {
                       keyboardType: TextInputType.emailAddress,
                       textInputAction: TextInputAction.next,
                       autocorrect: false,
-                      validator: (value) {
-                        final email = value?.trim() ?? '';
-
-                        if (email.isEmpty) {
-                          return 'Ingresa tu correo';
-                        }
-
-                        final emailRegex = RegExp(
-                          r'^[^@\s]+@[^@\s]+\.[^@\s]+$',
-                        );
-
-                        if (!emailRegex.hasMatch(email)) {
-                          return 'Ingresa un correo válido';
-                        }
-
-                        return null;
-                      },
+                      validator: InputValidators.email,
                       decoration: const InputDecoration(
                         labelText: 'Correo electrónico',
                         prefixIcon: Icon(Icons.email_outlined),
@@ -250,19 +223,7 @@ class _RegisterPageState extends ConsumerState<RegisterPage> {
                       textInputAction: TextInputAction.next,
                       enableSuggestions: false,
                       autocorrect: false,
-                      validator: (value) {
-                        final password = value ?? '';
-
-                        if (password.isEmpty) {
-                          return 'Ingresa una contraseña';
-                        }
-
-                        if (password.length < 6) {
-                          return 'La contraseña debe tener al menos 6 caracteres';
-                        }
-
-                        return null;
-                      },
+                      validator: InputValidators.newPassword,
                       decoration: InputDecoration(
                         labelText: 'Contraseña',
                         prefixIcon: const Icon(Icons.lock_outline),

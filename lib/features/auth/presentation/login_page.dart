@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../app/router.dart';
 import '../../../app/theme.dart';
+import '../../../core/app_config.dart';
 import '../data/session_preferences.dart';
 import 'auth_provider.dart';
 
@@ -240,6 +241,9 @@ class _LoginPageState extends ConsumerState<LoginPage> {
       case 'google-id-token-missing':
         return 'Google no pudo completar la autenticación. Inténtalo nuevamente.';
 
+      case 'email-not-verified':
+        return 'Verifica tu correo electrónico antes de iniciar sesión. Te enviamos un enlace de verificación.';
+
       default:
         return 'No fue posible iniciar sesión. (${error.code})';
     }
@@ -437,71 +441,61 @@ class _LoginPageState extends ConsumerState<LoginPage> {
                       ),
                     ),
 
-                    const SizedBox(height: 20),
+                    if (AppConfig.googleIntegrationsEnabled) ...[
+                      const SizedBox(height: 20),
 
-                    // =====================================
-                    // SEPARADOR
-                    // =====================================
-                    const Row(
-                      children: [
-                        Expanded(child: Divider()),
-
-                        Padding(
-                          padding: EdgeInsets.symmetric(horizontal: 14),
-                          child: Text(
-                            'o',
-                            style: TextStyle(color: AppColors.textSecondary),
-                          ),
-                        ),
-
-                        Expanded(child: Divider()),
-                      ],
-                    ),
-
-                    const SizedBox(height: 20),
-
-                    // =====================================
-                    // LOGIN CON GOOGLE
-                    // =====================================
-                    SizedBox(
-                      width: double.infinity,
-                      child: OutlinedButton(
-                        onPressed: _isLoading ? null : _loginWithGoogle,
-                        style: OutlinedButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(vertical: 14),
-                          side: const BorderSide(color: AppColors.border),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                        ),
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            // =============================
-                            // LOGO REAL DE GOOGLE
-                            // =============================
-                            Image.asset(
-                              'assets/images/google_logo.png',
-                              width: 22,
-                              height: 22,
-                              fit: BoxFit.contain,
+                      const Row(
+                        children: [
+                          Expanded(child: Divider()),
+                          Padding(
+                            padding: EdgeInsets.symmetric(horizontal: 14),
+                            child: Text(
+                              'o',
+                              style: TextStyle(color: AppColors.textSecondary),
                             ),
+                          ),
+                          Expanded(child: Divider()),
+                        ],
+                      ),
 
-                            const SizedBox(width: 12),
+                      const SizedBox(height: 20),
 
-                            const Text(
-                              'Continuar con Google',
-                              style: TextStyle(
-                                fontWeight: FontWeight.w600,
-                                color: AppColors.textPrimary,
+                      SizedBox(
+                        width: double.infinity,
+                        child: OutlinedButton(
+                          onPressed: _isLoading ? null : _loginWithGoogle,
+                          style: OutlinedButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(vertical: 14),
+                            side: const BorderSide(color: AppColors.border),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                          ),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Image.asset(
+                                'assets/images/google_logo.png',
+                                width: 22,
+                                height: 22,
+                                fit: BoxFit.contain,
                               ),
-                            ),
-                          ],
+                              const SizedBox(width: 12),
+                              const Text(
+                                'Continuar con Google',
+                                style: TextStyle(
+                                  fontWeight: FontWeight.w600,
+                                  color: AppColors.textPrimary,
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
                       ),
-                    ),
 
-                    const SizedBox(height: 18),
+                      const SizedBox(height: 18),
+                    ] else
+                      const SizedBox(height: 18),
 
                     // =====================================
                     // REGISTRO

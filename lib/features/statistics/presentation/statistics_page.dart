@@ -385,6 +385,25 @@ class _CategoryBarChart extends StatelessWidget {
 
   const _CategoryBarChart({required this.categoryTotals});
 
+  String _axisLabel(ExpenseCategory category) {
+    switch (category) {
+      case ExpenseCategory.food:
+        return 'Aliment.';
+      case ExpenseCategory.transport:
+        return 'Transporte';
+      case ExpenseCategory.services:
+        return 'Servicios';
+      case ExpenseCategory.entertainment:
+        return 'Entreten.';
+      case ExpenseCategory.health:
+        return 'Salud';
+      case ExpenseCategory.education:
+        return 'Educación';
+      case ExpenseCategory.other:
+        return 'Otros';
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final entries =
@@ -430,6 +449,7 @@ class _CategoryBarChart extends StatelessWidget {
                   bottomTitles: AxisTitles(
                     sideTitles: SideTitles(
                       showTitles: true,
+                      reservedSize: 48,
                       getTitlesWidget: (value, meta) {
                         final index = value.toInt();
 
@@ -439,11 +459,18 @@ class _CategoryBarChart extends StatelessWidget {
 
                         return Padding(
                           padding: const EdgeInsets.only(top: 8),
-                          child: Text(
-                            '${index + 1}',
-                            style: const TextStyle(
-                              color: AppColors.textSecondary,
-                              fontWeight: FontWeight.bold,
+                          child: SizedBox(
+                            width: 66,
+                            child: Text(
+                              _axisLabel(entries[index].key),
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                              textAlign: TextAlign.center,
+                              style: const TextStyle(
+                                color: AppColors.textSecondary,
+                                fontSize: 9,
+                                fontWeight: FontWeight.w600,
+                              ),
                             ),
                           ),
                         );

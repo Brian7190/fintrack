@@ -3,6 +3,8 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 
+import '../../../../core/app_config.dart';
+
 import '../../domain/app_user.dart';
 import '../../domain/auth_repository.dart';
 
@@ -67,9 +69,12 @@ class FirebaseAuthRepository implements AuthRepository {
       'createdAt': Timestamp.fromDate(now),
       'lastLogin': Timestamp.fromDate(now),
       'loginCount': 1,
+      'requiresEmailVerification': true,
     };
 
     await _firestore.collection('users').doc(firebaseUser.uid).set(userData);
+
+    await firebaseUser.sendEmailVerification();
 
     return AppUser(
       uid: firebaseUser.uid,
@@ -102,6 +107,29 @@ class FirebaseAuthRepository implements AuthRepository {
       throw Exception('No se pudo iniciar sesión.');
     }
 
+    final profileSnapshot = await _firestore
+        .collection('users')
+        .doc(firebaseUser.uid)
+        .get();
+
+    final requiresEmailVerification =
+        profileSnapshot.data()?['requiresEmailVerification'] == true;
+
+    if (requiresEmailVerification && !firebaseUser.emailVerified) {
+      try {
+        await firebaseUser.sendEmailVerification();
+      } catch (_) {
+        // Evita ocultar el mensaje principal si Firebase limita el reenvío.
+      }
+
+      await _auth.signOut();
+
+      throw FirebaseAuthException(
+        code: 'email-not-verified',
+        message: 'Debes verificar tu correo antes de iniciar sesión.',
+      );
+    }
+
     await _updateLoginInformation(firebaseUser.uid);
 
     final user = await _getUserProfile(firebaseUser.uid);
@@ -119,6 +147,12 @@ class FirebaseAuthRepository implements AuthRepository {
 
   @override
   Future<AppUser> signInWithGoogle() async {
+    if (!AppConfig.googleIntegrationsEnabled) {
+      throw UnsupportedError(
+        'El inicio de sesión con Google no está disponible en esta versión.',
+      );
+    }
+
     late final UserCredential credential;
 
     // ==================================================

@@ -17,6 +17,7 @@ import '../../expenses/presentation/expense_category_ui.dart';
 import '../../expenses/presentation/expenses_provider.dart';
 
 import '../../payments/domain/payment.dart';
+import '../../payments/presentation/payment_reminder_utils.dart';
 import '../../payments/presentation/payments_provider.dart';
 
 final NumberFormat _moneyFormat = NumberFormat.currency(
@@ -80,7 +81,10 @@ class HomePage extends ConsumerWidget {
 
     final payments = ref.watch(paymentsProvider);
 
-    final nearestPayment = _getNearestPayment(payments);
+    final paymentReminder = PaymentReminderSummary.fromPayments(payments);
+
+    final nearestPayment =
+        paymentReminder.priorityPayment ?? _getNearestPayment(payments);
 
     final available = budget == null ? null : budget - spent;
 
@@ -93,6 +97,11 @@ class HomePage extends ConsumerWidget {
         : (spent / budget).clamp(0.0, 1.0).toDouble();
 
     final isOverBudget = budget != null && spent > budget;
+
+    // Avisamos antes de llegar al límite para que el usuario pueda reaccionar
+    // a tiempo. Al excederlo se conserva la alerta roja existente.
+    final isBudgetWarning =
+        budget != null && budget > 0 && percentageUsed >= 80 && !isOverBudget;
 
     return Scaffold(
       appBar: AppBar(
@@ -153,9 +162,15 @@ class HomePage extends ConsumerWidget {
                 ),
 
               // ==================================================
-              // ALERTA DE EXCESO
+              // ALERTA DE PRESUPUESTO
               // ==================================================
-              if (isOverBudget) ...[
+              if (isBudgetWarning) ...[
+                const SizedBox(height: 14),
+                _BudgetWarningNotice(
+                  percentageUsed: percentageUsed,
+                  available: available!,
+                ),
+              ] else if (isOverBudget) ...[
                 const SizedBox(height: 14),
                 _BudgetExceededNotice(amount: spent - budget),
               ],
@@ -208,6 +223,11 @@ class HomePage extends ConsumerWidget {
               ),
 
               const SizedBox(height: 12),
+
+              if (paymentReminder.hasAlert) ...[
+                _HomePaymentReminderNotice(summary: paymentReminder),
+                const SizedBox(height: 10),
+              ],
 
               if (nearestPayment == null)
                 const _NoUpcomingPayment()
@@ -609,6 +629,71 @@ class _NoBudgetHero extends StatelessWidget {
 // ALERTA PRESUPUESTO
 // ====================================================
 
+class _BudgetWarningNotice extends StatelessWidget {
+  final double percentageUsed;
+  final double available;
+
+  const _BudgetWarningNotice({
+    required this.percentageUsed,
+    required this.available,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(15),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFFF6E5),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: const Color(0xFFE6A700).withValues(alpha: 0.28),
+        ),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 40,
+            height: 40,
+            decoration: const BoxDecoration(
+              color: Colors.white,
+              shape: BoxShape.circle,
+            ),
+            child: const Icon(
+              Icons.warning_amber_rounded,
+              color: Color(0xFFB77900),
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Tu presupuesto está por agotarse',
+                  style: TextStyle(
+                    color: Color(0xFF8A5A00),
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  'Has utilizado ${percentageUsed.toStringAsFixed(1)}% de tu '
+                  'presupuesto. Te quedan ${_moneyFormat.format(available)}.',
+                  style: const TextStyle(
+                    color: AppColors.textSecondary,
+                    fontSize: 13,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _BudgetExceededNotice extends StatelessWidget {
   final double amount;
 
@@ -772,6 +857,70 @@ class _MetricCard extends StatelessWidget {
 // PRÓXIMO PAGO
 // ====================================================
 
+class _HomePaymentReminderNotice extends StatelessWidget {
+  final PaymentReminderSummary summary;
+
+  const _HomePaymentReminderNotice({required this.summary});
+
+  @override
+  Widget build(BuildContext context) {
+    final overdue = summary.overdueCount > 0;
+    final payment = summary.priorityPayment;
+
+    String text;
+    if (overdue) {
+      text = summary.overdueCount == 1
+          ? 'Tienes un pago vencido pendiente.'
+          : 'Tienes ${summary.overdueCount} pagos vencidos pendientes.';
+    } else if (summary.dueTodayCount > 0) {
+      text = summary.dueTodayCount == 1
+          ? 'Tienes un pago que vence hoy.'
+          : 'Tienes ${summary.dueTodayCount} pagos que vencen hoy.';
+    } else if (summary.dueTomorrowCount > 0) {
+      text = summary.dueTomorrowCount == 1
+          ? 'Tienes un pago que vence mañana.'
+          : 'Tienes ${summary.dueTomorrowCount} pagos que vencen mañana.';
+    } else {
+      text = payment == null
+          ? 'Tienes un pago próximo.'
+          : '${payment.name} vence ${paymentDueLabel(payment.dueDate).toLowerCase()}.';
+    }
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      decoration: BoxDecoration(
+        color: overdue ? const Color(0xFFFFEEEE) : const Color(0xFFFFF8E8),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: overdue ? const Color(0xFFF2B8B5) : const Color(0xFFF0D9A6),
+        ),
+      ),
+      child: Row(
+        children: [
+          Icon(
+            overdue
+                ? Icons.warning_amber_rounded
+                : Icons.notifications_active_outlined,
+            color: overdue ? AppColors.error : const Color(0xFF9A6700),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              text,
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: overdue ? AppColors.error : const Color(0xFF7A5200),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _UpcomingPaymentCard extends StatelessWidget {
   final Payment payment;
 
@@ -781,35 +930,26 @@ class _UpcomingPaymentCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final formattedDate = DateFormat('dd/MM/yyyy').format(payment.dueDate);
 
-    final now = DateTime.now();
-
-    final today = DateTime(now.year, now.month, now.day);
-
-    final dueDate = DateTime(
-      payment.dueDate.year,
-      payment.dueDate.month,
-      payment.dueDate.day,
-    );
-
-    final days = dueDate.difference(today).inDays;
-
-    String status;
-
-    if (days == 0) {
-      status = 'Vence hoy';
-    } else if (days == 1) {
-      status = 'Vence mañana';
-    } else {
-      status = 'En $days días';
-    }
+    final days = paymentDaysUntil(payment.dueDate);
+    final status = paymentDueLabel(payment.dueDate);
 
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: AppColors.surface,
+        color: days <= 0
+            ? const Color(0xFFFFF4F4)
+            : days <= 3
+            ? const Color(0xFFFFFAEE)
+            : AppColors.surface,
         borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: AppColors.border),
+        border: Border.all(
+          color: days <= 0
+              ? const Color(0xFFF2B8B5)
+              : days <= 3
+              ? const Color(0xFFF0D9A6)
+              : AppColors.border,
+        ),
       ),
       child: Row(
         children: [
@@ -842,9 +982,14 @@ class _UpcomingPaymentCard extends StatelessWidget {
                 const SizedBox(height: 3),
                 Text(
                   '$formattedDate • $status',
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 12,
-                    color: AppColors.textSecondary,
+                    color: days <= 0
+                        ? AppColors.error
+                        : days <= 3
+                        ? const Color(0xFF9A6700)
+                        : AppColors.textSecondary,
+                    fontWeight: days <= 3 ? FontWeight.w600 : FontWeight.normal,
                   ),
                 ),
               ],

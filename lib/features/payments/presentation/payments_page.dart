@@ -4,10 +4,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
 import '../../../app/theme.dart';
+import '../../../core/app_config.dart';
 import '../../calendar/calendar_service.dart';
 import '../../calendar/google_calendar_connect_button.dart';
 import '../domain/payment.dart';
 import 'payment_form_sheet.dart';
+import 'payment_reminder_utils.dart';
 import 'payments_provider.dart';
 
 class PaymentsPage extends ConsumerWidget {
@@ -37,6 +39,7 @@ class PaymentsPage extends ConsumerWidget {
     final payments = ref.watch(paymentsProvider);
 
     final total = ref.watch(totalPendingPaymentsProvider);
+    final reminder = PaymentReminderSummary.fromPayments(payments);
 
     return Scaffold(
       appBar: AppBar(
@@ -116,10 +119,10 @@ class PaymentsPage extends ConsumerWidget {
                     const SizedBox(height: 24),
 
                     // =====================================
-                    // CALENDARIO DE PAGOS
+                    // RECORDATORIOS DE PAGOS
                     // =====================================
                     const Text(
-                      'Calendario de pagos',
+                      'Recordatorios de pagos',
                       style: TextStyle(
                         fontSize: 20,
                         fontWeight: FontWeight.bold,
@@ -129,18 +132,25 @@ class PaymentsPage extends ConsumerWidget {
                     const SizedBox(height: 6),
 
                     const Text(
-                      'Tus pagos se sincronizan con Google Calendar.',
+                      'FinTrack te avisa dentro de la app cuando un pago está próximo o vencido.',
                       style: TextStyle(
                         color: AppColors.textSecondary,
                         fontSize: 13,
                       ),
                     ),
 
-                    // =====================================
-                    // CONEXIÓN GOOGLE CALENDAR WEB
-                    // =====================================
-                    if (kIsWeb) ...[
-                      const SizedBox(height: 14),
+                    const SizedBox(height: 14),
+
+                    if (reminder.hasAlert)
+                      _PaymentReminderBanner(summary: reminder)
+                    else
+                      const _PaymentReminderReadyCard(),
+
+                    // Google Calendar se conserva como función opcional para
+                    // una futura compilación Android. En Amazon permanece
+                    // desactivado y la app no depende de él para los pagos.
+                    if (AppConfig.googleCalendarEnabled && kIsWeb) ...[
+                      const SizedBox(height: 18),
 
                       FutureBuilder<void>(
                         future: CalendarService.initialize(),
@@ -169,7 +179,7 @@ class PaymentsPage extends ConsumerWidget {
                                   SizedBox(width: 10),
                                   Expanded(
                                     child: Text(
-                                      'No fue posible inicializar Google Calendar.',
+                                      'Google Calendar no está disponible en este momento.',
                                       style: TextStyle(fontSize: 12),
                                     ),
                                   ),
@@ -183,10 +193,6 @@ class PaymentsPage extends ConsumerWidget {
                             initialData: CalendarService.currentGoogleUser,
                             builder: (context, accountSnapshot) {
                               final googleUser = accountSnapshot.data;
-
-                              // =================================
-                              // CUENTA CONECTADA
-                              // =================================
 
                               if (googleUser != null) {
                                 return Container(
@@ -202,43 +208,18 @@ class PaymentsPage extends ConsumerWidget {
                                         Icons.check_circle,
                                         color: AppColors.primary,
                                       ),
-
                                       const SizedBox(width: 10),
-
                                       Expanded(
-                                        child: Column(
-                                          crossAxisAlignment:
-                                              CrossAxisAlignment.start,
-                                          children: [
-                                            const Text(
-                                              'Google Calendar conectado',
-                                              style: TextStyle(
-                                                fontSize: 12,
-                                                fontWeight: FontWeight.w600,
-                                              ),
-                                            ),
-
-                                            const SizedBox(height: 2),
-
-                                            Text(
-                                              googleUser.email,
-                                              overflow: TextOverflow.ellipsis,
-                                              style: const TextStyle(
-                                                fontSize: 11,
-                                                color: AppColors.textSecondary,
-                                              ),
-                                            ),
-                                          ],
+                                        child: Text(
+                                          'Google Calendar conectado: ${googleUser.email}',
+                                          overflow: TextOverflow.ellipsis,
+                                          style: const TextStyle(fontSize: 12),
                                         ),
                                       ),
                                     ],
                                   ),
                                 );
                               }
-
-                              // =================================
-                              // CONECTAR CUENTA
-                              // =================================
 
                               return Container(
                                 width: double.infinity,
@@ -250,36 +231,14 @@ class PaymentsPage extends ConsumerWidget {
                                 ),
                                 child: const Column(
                                   children: [
-                                    Icon(
-                                      Icons.calendar_month_outlined,
-                                      color: AppColors.primary,
-                                      size: 30,
-                                    ),
-
-                                    SizedBox(height: 8),
-
                                     Text(
-                                      'Conecta Google Calendar',
-                                      textAlign: TextAlign.center,
+                                      'Google Calendar (opcional)',
                                       style: TextStyle(
-                                        fontSize: 14,
+                                        fontSize: 13,
                                         fontWeight: FontWeight.w600,
                                       ),
                                     ),
-
-                                    SizedBox(height: 4),
-
-                                    Text(
-                                      'Conecta tu cuenta de Google para crear, editar y eliminar automáticamente los eventos de tus pagos.',
-                                      textAlign: TextAlign.center,
-                                      style: TextStyle(
-                                        fontSize: 12,
-                                        color: AppColors.textSecondary,
-                                      ),
-                                    ),
-
-                                    SizedBox(height: 14),
-
+                                    SizedBox(height: 10),
                                     GoogleCalendarConnectButton(),
                                   ],
                                 ),
@@ -288,11 +247,9 @@ class PaymentsPage extends ConsumerWidget {
                           );
                         },
                       ),
-
-                      const SizedBox(height: 8),
                     ],
 
-                    const SizedBox(height: 14),
+                    const SizedBox(height: 18),
 
                     // =====================================
                     // LISTADO DE PAGOS
@@ -307,6 +264,133 @@ class PaymentsPage extends ConsumerWidget {
                   ],
                 ),
               ),
+      ),
+    );
+  }
+}
+
+class _PaymentReminderBanner extends StatelessWidget {
+  final PaymentReminderSummary summary;
+
+  const _PaymentReminderBanner({required this.summary});
+
+  @override
+  Widget build(BuildContext context) {
+    final payment = summary.priorityPayment;
+    final days = summary.priorityDays;
+
+    final bool overdue = summary.hasOverdue;
+    final Color background = overdue
+        ? const Color(0xFFFFEEEE)
+        : const Color(0xFFFFF8E8);
+    final Color border = overdue
+        ? const Color(0xFFF2B8B5)
+        : const Color(0xFFF0D9A6);
+    final Color foreground = overdue
+        ? AppColors.error
+        : const Color(0xFF9A6700);
+
+    String title;
+    String message;
+
+    if (summary.overdueCount > 0) {
+      title = summary.overdueCount == 1
+          ? 'Tienes un pago vencido'
+          : 'Tienes ${summary.overdueCount} pagos vencidos';
+      message = payment == null
+          ? 'Revisa tus pagos pendientes.'
+          : '${payment.name} • ${paymentDueLabel(payment.dueDate)} • \$${payment.amount.toStringAsFixed(2)}';
+    } else if (summary.dueTodayCount > 0) {
+      title = summary.dueTodayCount == 1
+          ? 'Tienes un pago que vence hoy'
+          : 'Tienes ${summary.dueTodayCount} pagos que vencen hoy';
+      message = payment == null
+          ? 'Revisa tus pagos pendientes.'
+          : '${payment.name} • \$${payment.amount.toStringAsFixed(2)}';
+    } else if (summary.dueTomorrowCount > 0) {
+      title = summary.dueTomorrowCount == 1
+          ? 'Tienes un pago que vence mañana'
+          : 'Tienes ${summary.dueTomorrowCount} pagos que vencen mañana';
+      message = payment == null
+          ? 'Revisa tus pagos pendientes.'
+          : '${payment.name} • \$${payment.amount.toStringAsFixed(2)}';
+    } else {
+      title = 'Tienes un pago próximo';
+      message = payment == null || days == null
+          ? 'Revisa tus pagos pendientes.'
+          : '${payment.name} • En $days días • \$${payment.amount.toStringAsFixed(2)}';
+    }
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: background,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: border),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(
+            overdue
+                ? Icons.warning_amber_rounded
+                : Icons.notifications_active_outlined,
+            color: foreground,
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    color: foreground,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  message,
+                  style: const TextStyle(
+                    color: AppColors.textSecondary,
+                    fontSize: 12,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _PaymentReminderReadyCard extends StatelessWidget {
+  const _PaymentReminderReadyCard();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: AppColors.surfaceAlt,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: const Row(
+        children: [
+          Icon(Icons.notifications_none_outlined, color: AppColors.primary),
+          SizedBox(width: 12),
+          Expanded(
+            child: Text(
+              'No tienes pagos que venzan en los próximos 3 días.',
+              style: TextStyle(color: AppColors.textSecondary, fontSize: 12),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -362,7 +446,7 @@ class _EmptyPayments extends StatelessWidget {
             const SizedBox(height: 10),
 
             const Text(
-              'Los pagos pueden sincronizarse con Google Calendar.',
+              'FinTrack te avisará dentro de la app cuando se acerque la fecha de un pago.',
               textAlign: TextAlign.center,
               style: TextStyle(color: AppColors.textSecondary, fontSize: 12),
             ),
@@ -399,33 +483,8 @@ class _PaymentCard extends StatelessWidget {
 
     final date = DateFormat('dd/MM/yyyy').format(payment.dueDate);
 
-    final now = DateTime.now();
-
-    final today = DateTime(now.year, now.month, now.day);
-
-    final paymentDate = DateTime(
-      payment.dueDate.year,
-      payment.dueDate.month,
-      payment.dueDate.day,
-    );
-
-    final days = paymentDate.difference(today).inDays;
-
-    // ==================================================
-    // ESTADO
-    // ==================================================
-
-    String status;
-
-    if (days == 0) {
-      status = 'Vence hoy';
-    } else if (days == 1) {
-      status = 'Vence mañana';
-    } else if (days > 1) {
-      status = 'En $days días';
-    } else {
-      status = 'Vencido';
-    }
+    final days = paymentDaysUntil(payment.dueDate);
+    final status = paymentDueLabel(payment.dueDate);
 
     // ==================================================
     // TARJETA
@@ -486,16 +545,24 @@ class _PaymentCard extends StatelessWidget {
 
                       Text(
                         '$date • $status',
-                        style: const TextStyle(
-                          color: AppColors.textSecondary,
+                        style: TextStyle(
+                          color: days <= 0
+                              ? AppColors.error
+                              : days <= 3
+                              ? const Color(0xFF9A6700)
+                              : AppColors.textSecondary,
                           fontSize: 12,
+                          fontWeight: days <= 3
+                              ? FontWeight.w600
+                              : FontWeight.normal,
                         ),
                       ),
 
                       // =================================
                       // GOOGLE CALENDAR
                       // =================================
-                      if (payment.isSyncedWithGoogleCalendar) ...[
+                      if (AppConfig.googleCalendarEnabled &&
+                          payment.isSyncedWithGoogleCalendar) ...[
                         const SizedBox(height: 7),
 
                         const Row(

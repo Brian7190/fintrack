@@ -106,6 +106,62 @@ class _ExpenseFormSheetState extends ConsumerState<ExpenseFormSheet> {
 
     final amount = double.parse(_amountController.text.replaceAll(',', '.'));
 
+    // Antes de crear un gasto nuevo, avisamos si ya existe otro gasto con
+    // el mismo nombre dentro del mismo mes. No lo bloqueamos porque puede
+    // tratarse de un gasto legítimo repetido (por ejemplo, gasolina o comida).
+    if (!isEditing) {
+      final normalizedName = name
+          .toLowerCase()
+          .replaceAll(RegExp(r'\s+'), ' ')
+          .trim();
+
+      final hasSameNameThisMonth = ref.read(expensesProvider).any((expense) {
+        final existingName = expense.name
+            .toLowerCase()
+            .replaceAll(RegExp(r'\s+'), ' ')
+            .trim();
+
+        return existingName == normalizedName &&
+            expense.date.year == _selectedDate.year &&
+            expense.date.month == _selectedDate.month;
+      });
+
+      if (hasSameNameThisMonth) {
+        final monthLabel = DateFormat(
+          'MMMM yyyy',
+          'es_MX',
+        ).format(_selectedDate);
+
+        final addAnyway = await showDialog<bool>(
+          context: context,
+          barrierDismissible: false,
+          builder: (dialogContext) {
+            return AlertDialog(
+              title: const Text('Gasto con nombre repetido'),
+              content: Text(
+                'Ya existe un gasto llamado "$name" registrado en $monthLabel. '
+                '¿Deseas agregarlo de todas formas?',
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(dialogContext).pop(false),
+                  child: const Text('Cancelar'),
+                ),
+                FilledButton(
+                  onPressed: () => Navigator.of(dialogContext).pop(true),
+                  child: const Text('Agregar de todas formas'),
+                ),
+              ],
+            );
+          },
+        );
+
+        if (!mounted || addAnyway != true) {
+          return;
+        }
+      }
+    }
+
     setState(() {
       _isSaving = true;
     });

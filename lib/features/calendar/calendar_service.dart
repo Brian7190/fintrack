@@ -5,6 +5,8 @@ import 'package:flutter/foundation.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:googleapis/calendar/v3.dart' as calendar;
 
+import '../../core/app_config.dart';
+
 class CalendarConnectionRequiredException implements Exception {
   const CalendarConnectionRequiredException();
 
@@ -58,6 +60,12 @@ class CalendarService {
   }
 
   static Future<void> _initializeInternal() async {
+    if (!AppConfig.googleIntegrationsEnabled) {
+      throw UnsupportedError(
+        'Google Calendar no está disponible en esta versión de FinTrack.',
+      );
+    }
+
     await _googleSignIn.initialize(
       // En Web usamos el Client ID Web.
       clientId: kIsWeb ? _webClientId : null,

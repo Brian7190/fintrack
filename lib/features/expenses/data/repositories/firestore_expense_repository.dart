@@ -1,5 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
+import '../../../../core/input_validators.dart';
+
 import '../../domain/expense.dart';
 import '../../domain/expense_category.dart';
 import '../../domain/repositories/expense_repository.dart';
@@ -81,9 +83,19 @@ class FirestoreExpenseRepository implements ExpenseRepository {
     return Expense(
       id: document.id,
       name: data['name'] as String? ?? '',
-      amount: (data['amount'] as num?)?.toDouble() ?? 0,
+      amount: _safeAmount(data['amount']),
       date: date,
       category: category,
     );
+  }
+
+  double _safeAmount(Object? value) {
+    final amount = value is num ? value.toDouble() : 0.0;
+
+    if (!amount.isFinite || amount <= 0 || amount > FinanceLimits.maxAmount) {
+      return 0.0;
+    }
+
+    return amount;
   }
 }

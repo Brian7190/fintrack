@@ -3,6 +3,8 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
+import '../../../core/app_config.dart';
+import '../../../core/input_validators.dart';
 import '../domain/payment.dart';
 import 'payments_provider.dart';
 
@@ -69,6 +71,9 @@ class _PaymentFormSheetState extends ConsumerState<PaymentFormSheet> {
       initialDate: _selectedDate ?? now,
       firstDate: DateTime(now.year, now.month, now.day),
       lastDate: DateTime(now.year + 5),
+      helpText: 'Selecciona la fecha de pago',
+      cancelText: 'Cancelar',
+      confirmText: 'Seleccionar',
     );
 
     if (!mounted || date == null) {
@@ -95,23 +100,79 @@ class _PaymentFormSheetState extends ConsumerState<PaymentFormSheet> {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Selecciona una fecha de pago')),
       );
-
       return;
     }
 
     FocusScope.of(context).unfocus();
 
     final name = _nameController.text.trim();
+    final amount = InputValidators.parseAmount(_amountController.text)!;
 
-    final amount = double.parse(_amountController.text.replaceAll(',', '.'));
+    // Antes de crear un pago nuevo, avisamos si ya existe otro pago con
+    // el mismo nombre dentro del mismo mes. Se permite continuar porque
+    // puede tratarse de un pago legítimo repetido.
+    if (!isEditing) {
+      final normalizedName = name
+          .toLowerCase()
+          .replaceAll(RegExp(r'\s+'), ' ')
+          .trim();
+
+      final hasSameNameThisMonth = ref.read(paymentsProvider).any((payment) {
+        final existingName = payment.name
+            .toLowerCase()
+            .replaceAll(RegExp(r'\s+'), ' ')
+            .trim();
+
+        return existingName == normalizedName &&
+            payment.dueDate.year == _selectedDate!.year &&
+            payment.dueDate.month == _selectedDate!.month;
+      });
+
+      if (hasSameNameThisMonth) {
+        final monthLabel = DateFormat(
+          'MMMM yyyy',
+          'es_MX',
+        ).format(_selectedDate!);
+
+        final addAnyway = await showDialog<bool>(
+          context: context,
+          barrierDismissible: false,
+          builder: (dialogContext) {
+            return AlertDialog(
+              title: const Text('Pago con nombre repetido'),
+              content: Text(
+                'Ya existe un pago llamado "$name" registrado en $monthLabel. '
+                '¿Deseas agregarlo de todas formas?',
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(dialogContext).pop(false),
+                  child: const Text('Cancelar'),
+                ),
+                FilledButton(
+                  onPressed: () => Navigator.of(dialogContext).pop(true),
+                  child: const Text('Agregar de todas formas'),
+                ),
+              ],
+            );
+          },
+        );
+
+        if (!mounted || addAnyway != true) {
+          return;
+        }
+      }
+    }
 
     setState(() {
       _isSaving = true;
     });
 
     try {
+      final PaymentOperationResult result;
+
       if (isEditing) {
-        await ref
+        result = await ref
             .read(paymentsProvider.notifier)
             .updatePayment(
               id: widget.payment!.id,
@@ -120,7 +181,7 @@ class _PaymentFormSheetState extends ConsumerState<PaymentFormSheet> {
               dueDate: _selectedDate!,
             );
       } else {
-        await ref
+        result = await ref
             .read(paymentsProvider.notifier)
             .addPayment(name: name, amount: amount, dueDate: _selectedDate!);
       }
@@ -129,26 +190,35 @@ class _PaymentFormSheetState extends ConsumerState<PaymentFormSheet> {
         return;
       }
 
+      final messenger = ScaffoldMessenger.of(context);
       Navigator.of(context).pop();
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            isEditing
-                ? 'Pago actualizado correctamente'
-                : 'Pago agregado correctamente',
-          ),
-        ),
-      );
-    } catch (error) {
+      final String message;
+
+      if (result.failed) {
+        message = isEditing
+            ? 'Pago actualizado en FinTrack, pero no se pudo sincronizar con Google Calendar.'
+            : 'Pago guardado en FinTrack, pero no se pudo sincronizar con Google Calendar.';
+      } else if (result.synced) {
+        message = isEditing
+            ? 'Pago actualizado y sincronizado correctamente'
+            : 'Pago agregado y sincronizado correctamente';
+      } else {
+        message = isEditing
+            ? 'Pago actualizado correctamente'
+            : 'Pago agregado correctamente';
+      }
+
+      messenger.showSnackBar(SnackBar(content: Text(message)));
+    } catch (_) {
       if (!mounted) {
         return;
       }
 
       _showError(
         isEditing
-            ? 'No fue posible actualizar el pago o Google Calendar.'
-            : 'No fue posible guardar el pago o sincronizarlo con Google Calendar.',
+            ? 'No fue posible actualizar el pago en FinTrack.'
+            : 'No fue posible guardar el pago en FinTrack.',
       );
     } finally {
       if (mounted) {
@@ -176,21 +246,18 @@ class _PaymentFormSheetState extends ConsumerState<PaymentFormSheet> {
         return AlertDialog(
           title: const Text('Eliminar pago'),
           content: Text(
-            '¿Deseas eliminar "${payment.name}"?\n\n'
-            'Si está sincronizado con Google Calendar, '
-            'el evento también será eliminado.',
+            AppConfig.googleCalendarEnabled &&
+                    payment.isSyncedWithGoogleCalendar
+                ? '¿Deseas eliminar "${payment.name}"?\n\nTambién se intentará eliminar su evento de Google Calendar.'
+                : '¿Deseas eliminar "${payment.name}"?',
           ),
           actions: [
             TextButton(
-              onPressed: () {
-                Navigator.of(dialogContext).pop(false);
-              },
+              onPressed: () => Navigator.of(dialogContext).pop(false),
               child: const Text('Cancelar'),
             ),
             FilledButton(
-              onPressed: () {
-                Navigator.of(dialogContext).pop(true);
-              },
+              onPressed: () => Navigator.of(dialogContext).pop(true),
               child: const Text('Eliminar'),
             ),
           ],
@@ -207,25 +274,32 @@ class _PaymentFormSheetState extends ConsumerState<PaymentFormSheet> {
     });
 
     try {
-      await ref.read(paymentsProvider.notifier).deletePayment(payment.id);
+      final result = await ref
+          .read(paymentsProvider.notifier)
+          .deletePayment(payment.id);
 
       if (!mounted) {
         return;
       }
 
+      final messenger = ScaffoldMessenger.of(context);
       Navigator.of(context).pop();
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Pago eliminado correctamente')),
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(
+            result.failed
+                ? 'Pago eliminado de FinTrack. No se pudo eliminar el evento de Google Calendar.'
+                : 'Pago eliminado correctamente',
+          ),
+        ),
       );
     } catch (_) {
       if (!mounted) {
         return;
       }
 
-      _showError(
-        'No fue posible eliminar el pago o su evento de Google Calendar.',
-      );
+      _showError('No fue posible eliminar el pago de FinTrack.');
     } finally {
       if (mounted) {
         setState(() {
@@ -248,19 +322,7 @@ class _PaymentFormSheetState extends ConsumerState<PaymentFormSheet> {
   }
 
   String? _validateAmount(String? value) {
-    final text = value?.replaceAll(',', '.') ?? '';
-
-    final amount = double.tryParse(text);
-
-    if (text.isEmpty) {
-      return 'Ingresa el monto';
-    }
-
-    if (amount == null || amount <= 0) {
-      return 'Ingresa un monto válido';
-    }
-
-    return null;
+    return InputValidators.moneyAmount(value);
   }
 
   // ====================================================
@@ -313,9 +375,11 @@ class _PaymentFormSheetState extends ConsumerState<PaymentFormSheet> {
               const SizedBox(height: 6),
 
               Text(
-                isEditing
-                    ? 'Los cambios también se aplicarán al evento de Google Calendar.'
-                    : 'El pago se sincronizará automáticamente con Google Calendar.',
+                AppConfig.googleCalendarEnabled
+                    ? (isEditing
+                          ? 'El pago se guardará en FinTrack y se intentará actualizar en Google Calendar.'
+                          : 'El pago se guardará en FinTrack y se intentará sincronizar con Google Calendar.')
+                    : 'El pago se guardará en FinTrack.',
                 style: TextStyle(
                   color: Theme.of(context).colorScheme.onSurfaceVariant,
                   fontSize: 12,
@@ -354,6 +418,7 @@ class _PaymentFormSheetState extends ConsumerState<PaymentFormSheet> {
                   FilteringTextInputFormatter.allow(
                     RegExp(r'^\d*[.,]?\d{0,2}'),
                   ),
+                  LengthLimitingTextInputFormatter(11),
                 ],
                 validator: _validateAmount,
                 decoration: const InputDecoration(
@@ -385,55 +450,94 @@ class _PaymentFormSheetState extends ConsumerState<PaymentFormSheet> {
               // ==========================================
               // GOOGLE CALENDAR
               // ==========================================
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(14),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFE9F6EF),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Row(
-                  children: [
-                    const Icon(
-                      Icons.calendar_month_outlined,
-                      color: Color(0xFF238B57),
-                    ),
-
-                    const SizedBox(width: 12),
-
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Text(
-                            'Google Calendar',
-                            style: TextStyle(fontWeight: FontWeight.w600),
-                          ),
-
-                          const SizedBox(height: 2),
-
-                          Text(
-                            widget.payment?.isSyncedWithGoogleCalendar == true
-                                ? 'Este pago está sincronizado.'
-                                : 'Se sincronizará al guardar.',
-                            style: const TextStyle(
-                              fontSize: 11,
-                              color: Colors.black54,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-
-                    if (widget.payment?.isSyncedWithGoogleCalendar == true)
+              if (AppConfig.googleCalendarEnabled)
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFE9F6EF),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Row(
+                    children: [
                       const Icon(
-                        Icons.check_circle,
+                        Icons.calendar_month_outlined,
                         color: Color(0xFF238B57),
-                        size: 20,
                       ),
-                  ],
+
+                      const SizedBox(width: 12),
+
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text(
+                              'Google Calendar',
+                              style: TextStyle(fontWeight: FontWeight.w600),
+                            ),
+
+                            const SizedBox(height: 2),
+
+                            Text(
+                              widget.payment?.isSyncedWithGoogleCalendar == true
+                                  ? 'Este pago está sincronizado.'
+                                  : 'Se sincronizará al guardar.',
+                              style: const TextStyle(
+                                fontSize: 11,
+                                color: Colors.black54,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+
+                      if (widget.payment?.isSyncedWithGoogleCalendar == true)
+                        const Icon(
+                          Icons.check_circle,
+                          color: Color(0xFF238B57),
+                          size: 20,
+                        ),
+                    ],
+                  ),
+                )
+              else
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFFFF8E8),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: const Color(0xFFF0D9A6)),
+                  ),
+                  child: const Row(
+                    children: [
+                      Icon(
+                        Icons.notifications_active_outlined,
+                        color: Color(0xFF9A6700),
+                      ),
+                      SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              'Recordatorio de FinTrack',
+                              style: TextStyle(fontWeight: FontWeight.w600),
+                            ),
+                            SizedBox(height: 2),
+                            Text(
+                              'FinTrack te avisará dentro de la app cuando se acerque la fecha de este pago.',
+                              style: TextStyle(
+                                fontSize: 11,
+                                color: Colors.black54,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
-              ),
 
               const SizedBox(height: 24),
 

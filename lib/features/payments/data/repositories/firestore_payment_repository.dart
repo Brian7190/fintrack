@@ -1,5 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
+import '../../../../core/input_validators.dart';
+
 import '../../domain/payment.dart';
 import '../../domain/repositories/payment_repository.dart';
 
@@ -91,9 +93,19 @@ class FirestorePaymentRepository implements PaymentRepository {
     return Payment(
       id: document.id,
       name: data['name'] as String? ?? '',
-      amount: (data['amount'] as num?)?.toDouble() ?? 0,
+      amount: _safeAmount(data['amount']),
       dueDate: dueDate,
       googleCalendarEventId: data['googleCalendarEventId'] as String?,
     );
+  }
+
+  double _safeAmount(Object? value) {
+    final amount = value is num ? value.toDouble() : 0.0;
+
+    if (!amount.isFinite || amount <= 0 || amount > FinanceLimits.maxAmount) {
+      return 0.0;
+    }
+
+    return amount;
   }
 }

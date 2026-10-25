@@ -2,15 +2,12 @@ import 'dart:async';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/app_config.dart';
 import '../../auth/presentation/auth_provider.dart';
 import '../../calendar/calendar_service.dart';
 import '../data/repositories/firestore_payment_repository.dart';
 import '../domain/payment.dart';
 import '../domain/repositories/payment_repository.dart';
-
-// ====================================================
-// REPOSITORIO POR USUARIO
-// ====================================================
 
 final paymentRepositoryProvider = Provider.family<PaymentRepository, String>((
   ref,
@@ -19,29 +16,31 @@ final paymentRepositoryProvider = Provider.family<PaymentRepository, String>((
   return FirestorePaymentRepository(userId: userId);
 });
 
-// ====================================================
-// NOTIFIER
-// ====================================================
+enum CalendarSyncResult { synced, skipped, failed }
+
+class PaymentOperationResult {
+  final CalendarSyncResult calendar;
+
+  const PaymentOperationResult(this.calendar);
+
+  bool get synced => calendar == CalendarSyncResult.synced;
+  bool get failed => calendar == CalendarSyncResult.failed;
+}
 
 class PaymentsNotifier extends Notifier<List<Payment>> {
   StreamSubscription<List<Payment>>? _subscription;
-
   String? _currentUserId;
-
   List<Payment> _cachedPayments = const <Payment>[];
 
   @override
   List<Payment> build() {
     final authState = ref.watch(authStateProvider);
-
     final userId = authState.asData?.value?.uid;
 
     if (_currentUserId != userId) {
       _subscription?.cancel();
-
       _subscription = null;
       _currentUserId = userId;
-
       _cachedPayments = const <Payment>[];
     }
 
@@ -54,12 +53,10 @@ class PaymentsNotifier extends Notifier<List<Payment>> {
     _subscription ??= repository.watchPayments().listen(
       (payments) {
         _cachedPayments = payments;
-
         state = payments;
       },
       onError: (_) {
         _cachedPayments = const <Payment>[];
-
         state = const <Payment>[];
       },
     );
@@ -76,7 +73,6 @@ class PaymentsNotifier extends Notifier<List<Payment>> {
 
     if (userId == null) {
       final user = await ref.read(authRepositoryProvider).getCurrentUser();
-
       userId = user?.uid;
     }
 
@@ -86,10 +82,6 @@ class PaymentsNotifier extends Notifier<List<Payment>> {
 
     return ref.read(paymentRepositoryProvider(userId));
   }
-
-  // ==================================================
-  // BUSCAR PAGO ACTUAL
-  // ==================================================
 
   Payment? _findPayment(String id) {
     for (final payment in state) {
@@ -101,143 +93,139 @@ class PaymentsNotifier extends Notifier<List<Payment>> {
     return null;
   }
 
-  // ==================================================
-  // AGREGAR
-  // ==================================================
-
-  Future<void> addPayment({
+  Future<PaymentOperationResult> addPayment({
     required String name,
     required double amount,
     required DateTime dueDate,
   }) async {
     final repository = await _repository();
-
-    // Primero creamos el evento en Google Calendar.
-    final calendarEventId = await CalendarService.createEvent(
-      name: name,
-      amount: amount,
-      dueDate: dueDate,
-    );
 
     final payment = Payment(
       id: DateTime.now().microsecondsSinceEpoch.toString(),
       name: name,
       amount: amount,
       dueDate: dueDate,
-      googleCalendarEventId: calendarEventId,
     );
 
+    // El dato principal se guarda primero en FinTrack. Calendar es opcional.
+    await repository.addPayment(payment);
+
+    if (!AppConfig.googleCalendarEnabled) {
+      return const PaymentOperationResult(CalendarSyncResult.skipped);
+    }
+
     try {
-      await repository.addPayment(payment);
-    } catch (_) {
-      // Si Firestore falla, intentamos no dejar
-      // un evento huérfano en Google Calendar.
+      final eventId = await CalendarService.createEvent(
+        name: name,
+        amount: amount,
+        dueDate: dueDate,
+      );
+
       try {
-        await CalendarService.deleteEvent(eventId: calendarEventId);
+        await repository.updatePayment(
+          payment.copyWith(googleCalendarEventId: eventId),
+        );
       } catch (_) {
-        // No ocultamos el error original
-        // de Firestore.
+        // El pago ya está guardado. Evitamos dejar un evento huérfano.
+        try {
+          await CalendarService.deleteEvent(eventId: eventId);
+        } catch (_) {}
+        return const PaymentOperationResult(CalendarSyncResult.failed);
       }
 
-      rethrow;
+      return const PaymentOperationResult(CalendarSyncResult.synced);
+    } catch (_) {
+      return const PaymentOperationResult(CalendarSyncResult.failed);
     }
   }
 
-  // ==================================================
-  // ACTUALIZAR
-  // ==================================================
-
-  Future<void> updatePayment({
+  Future<PaymentOperationResult> updatePayment({
     required String id,
     required String name,
     required double amount,
     required DateTime dueDate,
   }) async {
     final repository = await _repository();
-
     final previous = _findPayment(id);
 
     if (previous == null) {
       throw StateError('No se encontró el pago que deseas editar.');
     }
 
-    String? calendarEventId = previous.googleCalendarEventId;
-
-    bool createdNewCalendarEvent = false;
-
-    // Pagos antiguos creados antes de esta
-    // integración todavía no tienen eventId.
-    if (calendarEventId == null || calendarEventId.isEmpty) {
-      calendarEventId = await CalendarService.createEvent(
-        name: name,
-        amount: amount,
-        dueDate: dueDate,
-      );
-
-      createdNewCalendarEvent = true;
-    } else {
-      await CalendarService.updateEvent(
-        eventId: calendarEventId,
-        name: name,
-        amount: amount,
-        dueDate: dueDate,
-      );
-    }
-
-    final updatedPayment = previous.copyWith(
+    // Guardamos primero el cambio en FinTrack.
+    final locallyUpdated = previous.copyWith(
       name: name,
       amount: amount,
       dueDate: dueDate,
-      googleCalendarEventId: calendarEventId,
     );
+    await repository.updatePayment(locallyUpdated);
+
+    if (!AppConfig.googleCalendarEnabled) {
+      return const PaymentOperationResult(CalendarSyncResult.skipped);
+    }
+
+    final existingEventId = previous.googleCalendarEventId;
 
     try {
-      await repository.updatePayment(updatedPayment);
-    } catch (_) {
-      // Intentamos devolver Calendar al estado anterior
-      // si Firestore falla.
+      if (existingEventId == null || existingEventId.isEmpty) {
+        final newEventId = await CalendarService.createEvent(
+          name: name,
+          amount: amount,
+          dueDate: dueDate,
+        );
 
-      if (createdNewCalendarEvent) {
         try {
-          await CalendarService.deleteEvent(eventId: calendarEventId);
-        } catch (_) {}
-      } else {
-        try {
-          await CalendarService.updateEvent(
-            eventId: calendarEventId,
-            name: previous.name,
-            amount: previous.amount,
-            dueDate: previous.dueDate,
+          await repository.updatePayment(
+            locallyUpdated.copyWith(googleCalendarEventId: newEventId),
           );
-        } catch (_) {}
+        } catch (_) {
+          try {
+            await CalendarService.deleteEvent(eventId: newEventId);
+          } catch (_) {}
+          return const PaymentOperationResult(CalendarSyncResult.failed);
+        }
+      } else {
+        await CalendarService.updateEvent(
+          eventId: existingEventId,
+          name: name,
+          amount: amount,
+          dueDate: dueDate,
+        );
       }
 
-      rethrow;
+      return const PaymentOperationResult(CalendarSyncResult.synced);
+    } catch (_) {
+      return const PaymentOperationResult(CalendarSyncResult.failed);
     }
   }
 
-  // ==================================================
-  // ELIMINAR
-  // ==================================================
-
-  Future<void> deletePayment(String id) async {
+  Future<PaymentOperationResult> deletePayment(String id) async {
     final repository = await _repository();
-
     final payment = _findPayment(id);
 
     if (payment == null) {
       throw StateError('No se encontró el pago que deseas eliminar.');
     }
 
-    final calendarEventId = payment.googleCalendarEventId;
+    // Eliminamos siempre de FinTrack, aunque Calendar no esté disponible.
+    await repository.deletePayment(id);
 
-    // Si tiene evento asociado,
-    // lo eliminamos primero de Calendar.
-    if (calendarEventId != null && calendarEventId.isNotEmpty) {
-      await CalendarService.deleteEvent(eventId: calendarEventId);
+    if (!AppConfig.googleCalendarEnabled) {
+      return const PaymentOperationResult(CalendarSyncResult.skipped);
     }
 
-    await repository.deletePayment(id);
+    final eventId = payment.googleCalendarEventId;
+
+    if (eventId == null || eventId.isEmpty) {
+      return const PaymentOperationResult(CalendarSyncResult.skipped);
+    }
+
+    try {
+      await CalendarService.deleteEvent(eventId: eventId);
+      return const PaymentOperationResult(CalendarSyncResult.synced);
+    } catch (_) {
+      return const PaymentOperationResult(CalendarSyncResult.failed);
+    }
   }
 }
 
@@ -245,12 +233,7 @@ final paymentsProvider = NotifierProvider<PaymentsNotifier, List<Payment>>(
   PaymentsNotifier.new,
 );
 
-// ====================================================
-// TOTAL
-// ====================================================
-
 final totalPendingPaymentsProvider = Provider<double>((ref) {
   final payments = ref.watch(paymentsProvider);
-
   return payments.fold<double>(0, (total, payment) => total + payment.amount);
 });

@@ -1,3 +1,5 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     // START: FlutterFire Configuration
@@ -8,12 +10,14 @@ plugins {
 }
 
 
-val keystoreProperties = java.util.Properties()
+val keystoreProperties = Properties()
 val keystorePropertiesFile = rootProject.file("key.properties")
 val hasReleaseKeystore = keystorePropertiesFile.exists()
 
 if (hasReleaseKeystore) {
-    keystorePropertiesFile.inputStream().use { keystoreProperties.load(it) }
+    keystorePropertiesFile.inputStream().use { inputStream ->
+        keystoreProperties.load(inputStream)
+    }
 }
 
 android {

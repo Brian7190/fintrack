@@ -6,6 +6,7 @@ import 'package:intl/intl.dart';
 import '../../../core/app_config.dart';
 import '../../../core/input_validators.dart';
 import '../domain/payment.dart';
+import '../domain/payment_duplicate_rules.dart';
 import 'payments_provider.dart';
 
 class PaymentFormSheet extends ConsumerStatefulWidget {
@@ -108,67 +109,73 @@ class _PaymentFormSheetState extends ConsumerState<PaymentFormSheet> {
     final name = _nameController.text.trim();
     final amount = InputValidators.parseAmount(_amountController.text)!;
 
-    // Antes de crear un pago nuevo, avisamos si ya existe otro pago con
-    // el mismo nombre dentro del mismo mes. Se permite continuar porque
-    // puede tratarse de un pago legítimo repetido.
-    if (!isEditing) {
-      final normalizedName = name
-          .toLowerCase()
-          .replaceAll(RegExp(r'\s+'), ' ')
-          .trim();
+    // Bloqueamos el botón durante la comprobación y el diálogo para evitar
+    // dobles pulsaciones en el mismo formulario.
+    setState(() => _isSaving = true);
 
-      final hasSameNameThisMonth = ref.read(paymentsProvider).any((payment) {
-        final existingName = payment.name
-            .toLowerCase()
-            .replaceAll(RegExp(r'\s+'), ' ')
-            .trim();
+    try {
+      final existing = ref.read(paymentsProvider);
+      final excludedId = widget.payment?.id;
+      final dueDate = _selectedDate!;
 
-        return existingName == normalizedName &&
-            payment.dueDate.year == _selectedDate!.year &&
-            payment.dueDate.month == _selectedDate!.month;
-      });
+      if (PaymentDuplicateRules.hasExactDuplicate(
+        existing,
+        name: name,
+        amount: amount,
+        dueDate: dueDate,
+        excludeId: excludedId,
+      )) {
+        _showError(
+          'Ya existe un pago idéntico con el mismo nombre, monto y fecha.',
+        );
+        return;
+      }
 
-      if (hasSameNameThisMonth) {
-        final monthLabel = DateFormat(
-          'MMMM yyyy',
-          'es_MX',
-        ).format(_selectedDate!);
-
+      if (PaymentDuplicateRules.hasSameNameInMonth(
+        existing,
+        name: name,
+        dueDate: dueDate,
+        excludeId: excludedId,
+      )) {
+        final monthLabel = DateFormat('MMMM yyyy', 'es_MX').format(dueDate);
         final addAnyway = await showDialog<bool>(
           context: context,
           barrierDismissible: false,
-          builder: (dialogContext) {
-            return AlertDialog(
-              title: const Text('Pago con nombre repetido'),
-              content: Text(
-                'Ya existe un pago llamado "$name" registrado en $monthLabel. '
-                '¿Deseas agregarlo de todas formas?',
+          builder: (dialogContext) => AlertDialog(
+            title: const Text('Pago con nombre repetido'),
+            content: Text(
+              'Ya existe un pago llamado "$name" registrado en $monthLabel. '
+              '¿Deseas agregarlo de todas formas?',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(dialogContext).pop(false),
+                child: const Text('Cancelar'),
               ),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.of(dialogContext).pop(false),
-                  child: const Text('Cancelar'),
-                ),
-                FilledButton(
-                  onPressed: () => Navigator.of(dialogContext).pop(true),
-                  child: const Text('Agregar de todas formas'),
-                ),
-              ],
-            );
-          },
+              FilledButton(
+                onPressed: () => Navigator.of(dialogContext).pop(true),
+                child: const Text('Agregar de todas formas'),
+              ),
+            ],
+          ),
         );
-
-        if (!mounted || addAnyway != true) {
-          return;
-        }
+        if (!mounted || addAnyway != true) return;
       }
-    }
 
-    setState(() {
-      _isSaving = true;
-    });
+      // También comprobamos justo antes de guardar, tras cualquier diálogo.
+      if (PaymentDuplicateRules.hasExactDuplicate(
+        ref.read(paymentsProvider),
+        name: name,
+        amount: amount,
+        dueDate: dueDate,
+        excludeId: excludedId,
+      )) {
+        _showError(
+          'Ya existe un pago idéntico con el mismo nombre, monto y fecha.',
+        );
+        return;
+      }
 
-    try {
       final PaymentOperationResult result;
 
       if (isEditing) {

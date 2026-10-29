@@ -7,6 +7,8 @@ import '../../auth/presentation/auth_provider.dart';
 import '../../calendar/calendar_service.dart';
 import '../data/repositories/firestore_payment_repository.dart';
 import '../domain/payment.dart';
+import '../domain/payment_duplicate_rules.dart';
+import '../../../core/input_validators.dart';
 import '../domain/repositories/payment_repository.dart';
 
 final paymentRepositoryProvider = Provider.family<PaymentRepository, String>((
@@ -93,12 +95,39 @@ class PaymentsNotifier extends Notifier<List<Payment>> {
     return null;
   }
 
+  void _validatePayment(String name, double amount, DateTime dueDate) {
+    if (name.trim().isEmpty ||
+        InputValidators.moneyAmount(amount.toString()) != null) {
+      throw ArgumentError('El nombre o monto del pago no es válido.');
+    }
+  }
+
+  void _rejectExactDuplicate(
+    String name,
+    double amount,
+    DateTime dueDate, {
+    String? excludeId,
+  }) {
+    if (PaymentDuplicateRules.hasExactDuplicate(
+      state,
+      name: name,
+      amount: amount,
+      dueDate: dueDate,
+      excludeId: excludeId,
+    )) {
+      throw StateError('Ya existe un pago idéntico.');
+    }
+  }
+
   Future<PaymentOperationResult> addPayment({
     required String name,
     required double amount,
     required DateTime dueDate,
   }) async {
+    _validatePayment(name, amount, dueDate);
+    _rejectExactDuplicate(name, amount, dueDate);
     final repository = await _repository();
+    _rejectExactDuplicate(name, amount, dueDate);
 
     final payment = Payment(
       id: DateTime.now().microsecondsSinceEpoch.toString(),
@@ -145,7 +174,10 @@ class PaymentsNotifier extends Notifier<List<Payment>> {
     required double amount,
     required DateTime dueDate,
   }) async {
+    _validatePayment(name, amount, dueDate);
+    _rejectExactDuplicate(name, amount, dueDate, excludeId: id);
     final repository = await _repository();
+    _rejectExactDuplicate(name, amount, dueDate, excludeId: id);
     final previous = _findPayment(id);
 
     if (previous == null) {

@@ -81,3 +81,29 @@ android/build/
 *.p8
 *service-account*.json
 *serviceAccountKey*.json
+
+# Variables de entorno y secretos
+.env
+.env.*
+!.env.example
+
+# Credenciales y claves privadas
+*.pem
+*.p12
+*.p8
+*service-account*.json
+*serviceAccountKey*.json
+
+android/build/
+
+# Variables de entorno y secretos
+.env
+.env.*
+!.env.example
+
+# Credenciales y claves privadas
+*.pem
+*.p12
+*.p8
+*service-account*.json
+*serviceAccountKey*.json
